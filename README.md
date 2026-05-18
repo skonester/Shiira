@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/shiira.png" width="128" height="128" alt="Shiira Logo" />
+  <img src="Shiira.png" width="128" height="128" alt="Shiira Logo" />
 </p>
 
 # Shiira Browser <img src="GPL3.png" align="right" height="48" alt="GPLv3 Logo" />
