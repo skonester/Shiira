@@ -25,7 +25,6 @@ const mime = require('mime-types');
 // Our renderer handles all keyboard shortcuts
 Menu.setApplicationMenu(null);
 const ChromeImporter = require('./chrome-importer');
-const AIService = require('./ai-service');
 const autoUpdaterService = require('./auto-updater');
 const FavoritesService = require('./favorites-service');
 const PasswordService = require('./password-service');
@@ -57,8 +56,6 @@ const cosmeticInjector = getCosmeticInjector();
 // Initialize Script Injector (YouTube ad blocking)
 const scriptInjector = getScriptInjector();
 
-// AI Service will be initialized after app is ready
-let aiService = null;
 let darkReaderScriptCache = null;
 const suggestionCache = new LRUCache({ max: 256, ttl: 1000 * 60 * 10 });
 const pendingDownloads = new WeakMap();
@@ -103,6 +100,7 @@ function preconnectBrowserSession(sessionInstance) {
 
   [
     'https://www.startpage.com',
+    'https://search.brave.com',
     'https://www.reddit.com',
     'https://styles.redditmedia.com',
     'https://preview.redd.it',
@@ -364,12 +362,6 @@ function handleKeyboardShortcut(event, input, targetWindow) {
   else if (ctrl && shift && key === 'b') shortcut = 'toggle-bookmarks-bar';
   else if (ctrl && shift && key === 'e') shortcut = 'tab-expose';
   else if (key === 'escape') shortcut = 'close-popups';
-  else if (ctrl && shift && key === 'i') {
-    // Open DevTools for the main window (docked) - works for inspecting both browser UI and webviews
-    event.preventDefault();
-    targetWindow.webContents.openDevTools();
-    return;
-  }
   
   if (shortcut) {
     event.preventDefault();
@@ -524,6 +516,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
+      devTools: false,
       backgroundThrottling: false,
       v8CacheOptions: 'bypassHeatCheckAndEagerCompile',
       preload: path.join(__dirname, '../preload/preload.js'),
@@ -763,8 +756,6 @@ function createWindow() {
     handleKeyboardShortcut(event, input, mainWindow);
   });
 
-  // DevTools can be opened manually via menu or keyboard shortcut (Ctrl+Shift+I)
-
   // Track this window
   browserWindows.add(mainWindow);
   console.log('[Session] Window opened. Total windows:', browserWindows.size);
@@ -898,14 +889,6 @@ ipcMain.handle('get-window-count', () => {
   return browserWindows.size;
 });
 
-// IPC Handler for opening DevTools (docked in main window)
-ipcMain.handle('open-devtools', (event) => {
-  const window = BrowserWindow.fromWebContents(event.sender);
-  if (window) {
-    window.webContents.openDevTools();
-  }
-});
-
 // IPC Handler for getting app info
 ipcMain.handle('get-app-info', () => {
   return {
@@ -939,6 +922,7 @@ ipcMain.handle('create-new-window', (event, url) => {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
+      devTools: false,
       backgroundThrottling: false,
       v8CacheOptions: 'bypassHeatCheckAndEagerCompile',
       preload: path.join(__dirname, '../preload/preload.js'),
@@ -1065,41 +1049,6 @@ ipcMain.handle('is-webcontents-audible', (event, webContentsId) => {
   return false;
 });
 
-// DevTools IPC handlers
-ipcMain.handle('devtools-open', (event, targetWebContentsId, devtoolsWebContentsId) => {
-  try {
-    const { webContents } = require('electron');
-    const targetWC = webContents.fromId(targetWebContentsId);
-    const devtoolsWC = webContents.fromId(devtoolsWebContentsId);
-    
-    if (targetWC && devtoolsWC) {
-      targetWC.setDevToolsWebContents(devtoolsWC);
-      targetWC.openDevTools({ mode: 'detach' });
-      return true;
-    }
-  } catch (e) {
-    console.error('[DevTools] Failed to open:', e);
-  }
-  return false;
-});
-
-ipcMain.handle('devtools-close', (event, targetWebContentsId) => {
-  try {
-    const { webContents } = require('electron');
-    const targetWC = webContents.fromId(targetWebContentsId);
-    
-    if (targetWC) {
-      targetWC.closeDevTools();
-      return true;
-    }
-  } catch (e) {
-    console.error('[DevTools] Failed to close:', e);
-  }
-  return false;
-});
-
-
-
 // Chrome Import IPC Handlers
 ipcMain.handle('chrome-get-profiles', () => {
   return chromeImporter.getProfiles();
@@ -1119,15 +1068,6 @@ ipcMain.handle('chrome-import-history', (event, profileId, limit) => {
 
 ipcMain.handle('chrome-get-saved-logins', (event, profileId) => {
   return chromeImporter.getSavedLoginSites(profileId);
-});
-
-// AI Service IPC Handlers
-ipcMain.handle('ai-get-providers', () => {
-  return aiService ? aiService.getProviders() : {};
-});
-
-ipcMain.handle('ai-toggle-provider', (event, providerId, enabled) => {
-  return aiService ? aiService.toggleProvider(providerId, enabled) : { success: false, error: 'AI service not ready' };
 });
 
 // Privacy Service IPC Handlers
@@ -1381,7 +1321,6 @@ ipcMain.handle('get-url-suggestions', async (event, query) => {
 
 // Load credentials on startup
 app.whenReady().then(() => {
-  aiService = new AIService(app);
   favoritesService.initialize();
   bookmarksService.initialize();
   
@@ -1502,6 +1441,7 @@ ipcMain.handle('create-password-anvil-window', () => {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
+      devTools: false,
       preload: path.join(__dirname, '../preload/preload.js')
     }
   });

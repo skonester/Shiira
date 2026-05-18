@@ -1613,7 +1613,7 @@ webview.active {
 }
 
 .welcome-title {
-  margin-bottom: 32px;
+  margin-bottom: 16px;
 }
 
 .welcome-title-small {
@@ -1634,6 +1634,14 @@ webview.active {
     0 0 10px var(--glow-color-mid),
     0 0 15px var(--glow-color-far);
   animation: shiiraGlow 3s ease-in-out infinite;
+}
+
+.welcome-copy {
+  max-width: 520px;
+  margin: 0 auto 22px;
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.5;
 }
 
 @keyframes shiiraFloat {
@@ -1662,7 +1670,7 @@ webview.active {
   position: relative;
   width: 500px;
   max-width: 90vw;
-  margin-top: -40px;
+  margin-top: 0;
 }
 
 .search-box input {
@@ -1705,6 +1713,16 @@ webview.active {
   border-color: var(--accent);
   background: rgba(var(--accent-rgb), 0.12);
   box-shadow: 0 0 18px rgba(var(--accent-rgb), 0.16);
+}
+
+.bring-your-own-ai {
+  width: min(520px, 90vw);
+  margin: 18px auto 0;
+  padding-top: 14px;
+  border-top: 1px solid rgba(var(--accent-rgb), 0.18);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .page-turning webview.active,
@@ -3696,164 +3714,6 @@ webview.active {
   margin-bottom: 8px;
 }
 
-/* ==================== AI Assistant ==================== */
-
-/* AI Buttons in toolbar */
-.ai-buttons {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-right: 4px;
-}
-
-.ai-agent-btn {
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: 6px;
-  background: var(--surface);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.15s ease;
-  padding: 0;
-  overflow: hidden;
-}
-
-.ai-agent-btn.showing {
-  animation: aiBtnIn 0.3s ease forwards;
-}
-
-.ai-agent-btn.hiding {
-  animation: aiBtnOut 0.3s ease forwards;
-}
-
-@keyframes aiBtnIn {
-  from {
-    opacity: 0;
-    width: 0;
-    transform: scale(0.8);
-  }
-  to {
-    opacity: 1;
-    width: 28px;
-    transform: scale(1);
-  }
-}
-
-@keyframes aiBtnOut {
-  from {
-    opacity: 1;
-    width: 28px;
-    transform: scale(1);
-  }
-  to {
-    opacity: 0;
-    width: 0;
-    transform: scale(0.8);
-  }
-}
-
-.ai-agent-btn:hover {
-  background: var(--hover);
-}
-
-.ai-agent-btn img {
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  filter: var(--icon-filter-primary);
-}
-
-.ai-agent-btn:hover img {
-  filter: var(--icon-filter-accent-hover);
-}
-
-/* AI Settings Panel */
-.ai-provider-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.ai-provider-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background: var(--background);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  transition: all 0.15s ease;
-}
-
-.ai-provider-item:hover {
-  border-color: var(--accent);
-}
-
-.ai-provider-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.ai-provider-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.ai-provider-name {
-  font-weight: 500;
-  color: var(--text-primary);
-  margin-bottom: 2px;
-}
-
-.ai-provider-status {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.ai-provider-status.enabled {
-  color: #4caf50;
-}
-
-/* AI Provider Toggle - same style as menu toggle */
-.ai-provider-toggle {
-  width: 36px;
-  height: 20px;
-  background: var(--border);
-  border-radius: 10px;
-  cursor: pointer;
-  transition: background 0.2s ease;
-  flex-shrink: 0;
-  position: relative;
-}
-
-.ai-provider-toggle::after {
-  content: '';
-  position: absolute;
-  width: 16px;
-  height: 16px;
-  background: white;
-  border-radius: 50%;
-  top: 2px;
-  left: 2px;
-  transition: transform 0.2s ease;
-}
-
-.ai-provider-toggle.active {
-  background: var(--accent);
-}
-
-.ai-provider-toggle.active::after {
-  transform: translateX(16px);
-}
-
 /* About Shiira Panel */
 .about-content {
   display: flex;
@@ -3998,175 +3858,6 @@ webview.active {
 
 .about-update-copy-btn:hover {
   background: #777;
-}
-
-/* AI Webview Panel (right side of window) */
-.ai-webview-panel {
-  position: fixed;
-  top: 38px; /* Height of tab bar */
-  right: 0;
-  bottom: 0;
-  width: var(--ai-panel-width, 450px);
-  background: var(--surface);
-  border-left: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  z-index: 100;
-  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.2);
-  transform: translateX(100%);
-  transition: transform 0.3s ease;
-}
-
-.ai-webview-panel.visible {
-  transform: translateX(0);
-}
-
-.ai-webview-panel.hidden {
-  display: flex;
-  transform: translateX(100%);
-  pointer-events: none;
-}
-
-/* AI Panel Resize Handle */
-.ai-panel-resize {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 6px;
-  cursor: ew-resize;
-  background: transparent;
-  z-index: 10;
-  transition: background 0.15s ease;
-}
-
-.ai-panel-resize:hover,
-.ai-panel-resize.dragging {
-  background: var(--accent);
-}
-
-.ai-webview-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-primary);
-  flex-shrink: 0;
-  height: 44px; /* Match navbar height */
-  box-sizing: border-box;
-}
-
-.ai-webview-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.ai-webview-icon {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.ai-webview-close-btn {
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s ease;
-}
-
-.ai-webview-close-btn:hover {
-  background: var(--hover);
-  color: var(--text-primary);
-}
-
-.ai-webview-container {
-  flex: 1;
-  overflow: hidden;
-  position: relative;
-  min-height: 0;
-}
-
-.ai-webview-container webview,
-.ai-webview-container .ai-webview {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  width: 100%;
-  height: 100%;
-  border: none;
-  display: flex;
-}
-
-/* Adjust browser content when AI panel is open */
-body.ai-panel-open #navbar {
-  margin-right: var(--ai-panel-width, 450px);
-}
-
-body.ai-panel-open #browser-content {
-  margin-right: var(--ai-panel-width, 450px);
-}
-
-body.ai-panel-open #statusbar {
-  margin-right: var(--ai-panel-width, 450px);
-}
-
-/* Move context menu and favorites panel when AI panel is open */
-body.ai-panel-open .context-menu {
-  right: calc(var(--ai-panel-width, 450px) + 12px) !important;
-  transition: right 0.3s ease;
-}
-
-body.ai-panel-open .favorites-panel:not(.hidden) {
-  right: var(--ai-panel-width, 450px);
-}
-
-/* AI Provider Colors */
-.ai-icon-chatgpt {
-  background: linear-gradient(135deg, #74aa9c, #10a37f);
-}
-
-.ai-icon-claude {
-  background: linear-gradient(135deg, #d4a574, #cc785c);
-}
-
-.ai-icon-gemini {
-  background: linear-gradient(135deg, #4285f4, #ea4335);
-}
-
-.ai-icon-grok {
-  background: linear-gradient(135deg, #1a1a1a, #333);
-}
-
-/* AI toolbar icons - cream color #FFF6D3 */
-.ai-toolbar-icon {
-  filter: var(--icon-filter-primary);
-}
-
-/* AI settings panel icons */
-.ai-provider-icon img {
-  filter: brightness(0) invert(1);
-}
-
-/* AI webview header icon */
-.ai-webview-icon img {
-  filter: brightness(0) invert(1);
 }
 
 /* ==================== Favorites ==================== */
@@ -4658,6 +4349,18 @@ body.bookmarks-bar-open .favorites-panel {
   border: none;
   display: flex !important;
   position: relative !important;
+}
+
+.about-link {
+  color: var(--accent);
+  font-size: 13px;
+  text-decoration: none;
+  margin-bottom: 16px;
+}
+
+.about-link:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
 }
 
 /* ==========================================

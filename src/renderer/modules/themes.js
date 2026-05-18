@@ -151,7 +151,7 @@ export const ThemesMixin = {
         root.style.setProperty('--icon-filter-accent', 'brightness(0) saturate(100%) invert(64%) sepia(53%) saturate(3098%) hue-rotate(335deg) brightness(102%) contrast(101%)');
         root.style.setProperty('--icon-filter-accent-hover', 'brightness(0) saturate(100%) invert(78%) sepia(53%) saturate(1057%) hue-rotate(344deg) brightness(103%) contrast(97%)');
         root.style.setProperty('--icon-filter-success', 'brightness(0) saturate(100%) invert(60%) sepia(80%) saturate(500%) hue-rotate(85deg) brightness(95%) contrast(90%)');
-        root.style.setProperty('--logo-filter-accent', 'brightness(0) saturate(100%) invert(64%) sepia(53%) saturate(3098%) hue-rotate(335deg) brightness(102%) contrast(101%)');
+        root.style.setProperty('--logo-filter-accent', 'none');
         // Glow colors for text effects
         root.style.setProperty('--glow-color-base', 'rgba(255, 150, 30, 0.3)');
         root.style.setProperty('--glow-color-mid', 'rgba(255, 150, 30, 0.2)');
@@ -189,7 +189,7 @@ export const ThemesMixin = {
         root.style.setProperty('--icon-filter-accent', 'brightness(0) saturate(100%) invert(64%) sepia(53%) saturate(3098%) hue-rotate(335deg) brightness(102%) contrast(101%)');
         root.style.setProperty('--icon-filter-accent-hover', 'brightness(0) saturate(100%) invert(78%) sepia(53%) saturate(1057%) hue-rotate(344deg) brightness(103%) contrast(97%)');
         root.style.setProperty('--icon-filter-success', 'brightness(0) saturate(100%) invert(60%) sepia(80%) saturate(500%) hue-rotate(85deg) brightness(95%) contrast(90%)');
-        root.style.setProperty('--logo-filter-accent', 'brightness(0) saturate(100%) invert(64%) sepia(53%) saturate(3098%) hue-rotate(335deg) brightness(102%) contrast(101%)');
+        root.style.setProperty('--logo-filter-accent', 'none');
         // Glow colors for text effects
         root.style.setProperty('--glow-color-base', 'rgba(255, 150, 30, 0.3)');
         root.style.setProperty('--glow-color-mid', 'rgba(255, 150, 30, 0.2)');
@@ -230,7 +230,7 @@ export const ThemesMixin = {
         root.style.setProperty('--icon-filter-accent', 'brightness(0) saturate(100%) invert(14%) sepia(97%) saturate(7471%) hue-rotate(0deg) brightness(94%) contrast(117%)');
         root.style.setProperty('--icon-filter-accent-hover', 'brightness(0) saturate(100%) invert(23%) sepia(95%) saturate(6589%) hue-rotate(358deg) brightness(91%) contrast(119%)');
         root.style.setProperty('--icon-filter-success', 'brightness(0) saturate(100%) invert(60%) sepia(80%) saturate(500%) hue-rotate(85deg) brightness(95%) contrast(90%)');
-        root.style.setProperty('--logo-filter-accent', 'brightness(0) saturate(100%) invert(14%) sepia(97%) saturate(7471%) hue-rotate(0deg) brightness(94%) contrast(117%)');
+        root.style.setProperty('--logo-filter-accent', 'none');
         // Glow colors for text effects - deep red
         root.style.setProperty('--glow-color-base', 'rgba(204, 0, 0, 0.3)');
         root.style.setProperty('--glow-color-mid', 'rgba(204, 0, 0, 0.2)');
@@ -271,7 +271,7 @@ export const ThemesMixin = {
         root.style.setProperty('--icon-filter-accent', 'brightness(0) saturate(100%) invert(49%) sepia(18%) saturate(1028%) hue-rotate(161deg) brightness(92%) contrast(91%)');
         root.style.setProperty('--icon-filter-accent-hover', 'brightness(0) saturate(100%) invert(59%) sepia(28%) saturate(858%) hue-rotate(161deg) brightness(95%) contrast(93%)');
         root.style.setProperty('--icon-filter-success', 'brightness(0) saturate(100%) invert(60%) sepia(80%) saturate(500%) hue-rotate(85deg) brightness(95%) contrast(90%)');
-        root.style.setProperty('--logo-filter-accent', 'brightness(0) saturate(100%) invert(49%) sepia(18%) saturate(1028%) hue-rotate(161deg) brightness(92%) contrast(91%)');
+        root.style.setProperty('--logo-filter-accent', 'none');
         // Glow colors for text effects - blue steel
         root.style.setProperty('--glow-color-base', 'rgba(74, 124, 157, 0.3)');
         root.style.setProperty('--glow-color-mid', 'rgba(74, 124, 157, 0.2)');
@@ -312,7 +312,7 @@ export const ThemesMixin = {
         root.style.setProperty('--icon-filter-accent', 'brightness(0) saturate(100%) invert(56%) sepia(27%) saturate(569%) hue-rotate(350deg) brightness(92%) contrast(88%)');
         root.style.setProperty('--icon-filter-accent-hover', 'brightness(0) saturate(100%) invert(66%) sepia(37%) saturate(669%) hue-rotate(350deg) brightness(95%) contrast(90%)');
         root.style.setProperty('--icon-filter-success', 'brightness(0) saturate(100%) invert(60%) sepia(80%) saturate(500%) hue-rotate(85deg) brightness(95%) contrast(90%)');
-        root.style.setProperty('--logo-filter-accent', 'brightness(0) saturate(100%) invert(56%) sepia(27%) saturate(569%) hue-rotate(350deg) brightness(92%) contrast(88%)');
+        root.style.setProperty('--logo-filter-accent', 'none');
         // Glow colors for text effects - muted copper
         root.style.setProperty('--glow-color-base', 'rgba(166, 124, 82, 0.3)');
         root.style.setProperty('--glow-color-mid', 'rgba(166, 124, 82, 0.2)');
@@ -353,7 +353,7 @@ export const ThemesMixin = {
         root.style.setProperty('--icon-filter-accent', 'brightness(0) saturate(100%) invert(56%) sepia(99%) saturate(6456%) hue-rotate(286deg) brightness(101%) contrast(100%)');
         root.style.setProperty('--icon-filter-accent-hover', 'brightness(0) saturate(100%) invert(66%) sepia(99%) saturate(5456%) hue-rotate(286deg) brightness(103%) contrast(102%)');
         root.style.setProperty('--icon-filter-success', 'brightness(0) saturate(100%) invert(60%) sepia(80%) saturate(500%) hue-rotate(85deg) brightness(95%) contrast(90%)');
-        root.style.setProperty('--logo-filter-accent', 'brightness(0) saturate(100%) invert(80%) sepia(74%) saturate(5806%) hue-rotate(280deg) brightness(103%) contrast(100%)');
+        root.style.setProperty('--logo-filter-accent', 'none');
         // Glow colors for text effects - cotton candy pink
         root.style.setProperty('--glow-color-base', 'rgba(255, 135, 244, 0.3)');
         root.style.setProperty('--glow-color-mid', 'rgba(255, 135, 244, 0.2)');

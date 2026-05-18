@@ -2,6 +2,11 @@
 // Adds palette drawers, Tab Expose, page-turn transitions, and Startpage search.
 
 const SEARCH_ENGINES = {
+  brave: {
+    label: 'Brave',
+    logo: 'shiira-asset://site-logos/brave-search.svg',
+    url: query => `https://search.brave.com/search?q=${encodeURIComponent(query)}&source=web`
+  },
   startpage: {
     label: 'Startpage',
     logo: 'shiira-asset://site-logos/Startpage.com_logo.svg',
@@ -11,8 +16,10 @@ const SEARCH_ENGINES = {
 
 export const ShiiraHomageMixin = {
   initShiiraHomage() {
-    this.currentSearchEngine = 'startpage';
-    localStorage.setItem('shiira-search-engine', 'startpage');
+    this.currentSearchEngine = localStorage.getItem('shiira-search-engine') || 'brave';
+    if (!SEARCH_ENGINES[this.currentSearchEngine]) {
+      this.currentSearchEngine = 'brave';
+    }
     this.btnShiiraDrawer = document.getElementById('btn-shiira-drawer');
     this.shiiraDrawer = document.getElementById('shiira-drawer');
     this.btnCloseShiiraDrawer = document.getElementById('btn-close-shiira-drawer');

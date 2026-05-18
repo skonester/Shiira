@@ -13,7 +13,6 @@ import { PasswordManagerMixin } from './password-anvil/password-manager.js';
 import { HistoryMixin } from './modules/history.js';
 import { FavoritesMixin } from './modules/favorites.js';
 import { AdBlockerMixin } from './modules/ad-blocker.js';
-import { AIAssistantMixin } from './modules/ai-assistant.js';
 import { UrlSuggestionsMixin } from './modules/url-suggestions.js';
 import { WindowControlsMixin } from './modules/window-controls.js';
 import { KeyboardShortcutsMixin } from './modules/keyboard-shortcuts.js';
@@ -68,6 +67,7 @@ class ShiiraBrowser {
     
     // Site logos for tab titles
     this.siteLogos = {
+      'search.brave.com': 'shiira-asset://site-logos/brave-search.svg',
       'www.startpage.com': 'shiira-asset://site-logos/Startpage.com_logo.svg',
       'startpage.com': 'shiira-asset://site-logos/Startpage.com_logo.svg'
     };
@@ -108,8 +108,6 @@ class ShiiraBrowser {
     
     await this.initAdBlocker();
     await this.initFavorites();
-    await this.initAIProviders();
-    this.initAIPanelResize();
     this.initPasswordManager();
     
     // Display app info
@@ -178,7 +176,7 @@ class ShiiraBrowser {
     const webview = document.createElement('webview');
     webview.id = 'oauth-webview';
     webview.setAttribute('partition', 'persist:main');
-    webview.setAttribute('webpreferences', 'contextIsolation=yes,plugins=yes,backgroundThrottling=no,v8CacheOptions=bypassHeatCheckAndEagerCompile');
+    webview.setAttribute('webpreferences', 'contextIsolation=yes,devTools=no,plugins=yes,backgroundThrottling=no,v8CacheOptions=bypassHeatCheckAndEagerCompile');
     webview.src = url;
     
     container.appendChild(webview);
@@ -383,19 +381,6 @@ class ShiiraBrowser {
     this.btnCheckUpdates = document.getElementById('btn-check-updates');
     this.updateStatusElement = document.getElementById('update-status');
     
-    // AI Assistant
-    this.aiButtons = document.getElementById('ai-buttons');
-    this.aiSettingsPanel = document.getElementById('ai-settings-panel');
-    this.aiSettingsContent = document.getElementById('ai-settings-content');
-    this.btnCloseAISettings = document.getElementById('btn-close-ai-settings');
-    this.aiWebviewPanel = document.getElementById('ai-webview-panel');
-    this.aiWebviewContainer = document.getElementById('ai-webview-container');
-    this.aiWebviewIcon = document.getElementById('ai-webview-icon');
-    this.aiWebviewName = document.getElementById('ai-webview-name');
-    this.btnAIWebviewClose = document.getElementById('btn-ai-webview-close');
-    this.currentAIProvider = null;
-    this.aiWebview = null;
-    
     // Favorites
     this.btnFavorites = document.getElementById('btn-favorites');
     this.favoritesToggle = document.getElementById('favorites-toggle');
@@ -532,9 +517,14 @@ class ShiiraBrowser {
     if (this.historySearch) this.historySearch.addEventListener('input', () => this.filterHistory());
     if (this.btnCloseAbout) this.btnCloseAbout.addEventListener('click', () => this.hideAboutPanel());
     if (this.btnCheckUpdates) this.btnCheckUpdates.addEventListener('click', () => this.checkForUpdates());
+    document.querySelectorAll('.about-link[data-url]').forEach(link => {
+      link.addEventListener('click', (event) => {
+        event.preventDefault();
+        this.hideAboutPanel();
+        this.createTab(link.dataset.url);
+      });
+    });
     if (this.btnCloseChromeImport) this.btnCloseChromeImport.addEventListener('click', () => this.hideChromeImportPanel());
-    if (this.btnCloseAISettings) this.btnCloseAISettings.addEventListener('click', () => this.hideAISettingsPanel());
-    if (this.btnAIWebviewClose) this.btnAIWebviewClose.addEventListener('click', () => this.hideAIWebviewPanel());
     
     // Password Anvil
     if (this.btnClosePasswordAnvil) this.btnClosePasswordAnvil.addEventListener('click', () => this.hidePasswordAnvilPanel());
@@ -1002,7 +992,6 @@ applyMixin(ShiiraBrowser, HistoryMixin);           // Browsing history
 applyMixin(ShiiraBrowser, FavoritesMixin);         // Favorites bar
 applyMixin(ShiiraBrowser, BookmarksMixin);         // Bookmarks bar
 applyMixin(ShiiraBrowser, AdBlockerMixin);         // Ad blocking
-applyMixin(ShiiraBrowser, AIAssistantMixin);       // AI sidebar
 applyMixin(ShiiraBrowser, UrlSuggestionsMixin);    // URL autocomplete
 applyMixin(ShiiraBrowser, WindowControlsMixin);    // Window minimize/maximize/close
 applyMixin(ShiiraBrowser, KeyboardShortcutsMixin); // Keyboard shortcuts

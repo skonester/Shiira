@@ -150,7 +150,7 @@ export const TabManagerMixin = {
     const webview = document.createElement('webview');
     webview.id = tabId;
     webview.setAttribute('partition', privateMode ? `private:${tabId}` : 'persist:main');
-    webview.setAttribute('webpreferences', 'contextIsolation=yes,plugins=yes,backgroundThrottling=no,v8CacheOptions=bypassHeatCheckAndEagerCompile');
+    webview.setAttribute('webpreferences', 'contextIsolation=yes,devTools=no,plugins=yes,backgroundThrottling=no,v8CacheOptions=bypassHeatCheckAndEagerCompile');
     
     this.setupWebviewEvents(webview, tabId);
     

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title>Brave Search</title>
+  <defs>
+    <linearGradient id="flame" x1="12" y1="10" x2="52" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ff7a1a"/>
+      <stop offset="0.54" stop-color="#fb542b"/>
+      <stop offset="1" stop-color="#e1362d"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#flame)" d="M32 4 15 12 8 29l5 21 19 10 19-10 5-21-7-17L32 4Z"/>
+  <path fill="#fff8ed" d="M22 23h20l4 9-5 13-9 5-9-5-5-13 4-9Z"/>
+  <path fill="#2d1a12" d="M24 31h16l-3 9-5 3-5-3-3-9Zm4 2 1 4 3 2 3-2 1-4h-8Z"/>
+  <path fill="#2d1a12" d="M20 24h8l-4 4h-6l2-4Zm16 0h8l2 4h-6l-4-4Z"/>
+</svg>

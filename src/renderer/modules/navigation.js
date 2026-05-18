@@ -26,7 +26,7 @@ export const NavigationMixin = {
     const webview = document.createElement('webview');
     webview.id = tab.id;
     webview.setAttribute('partition', 'persist:main');
-    webview.setAttribute('webpreferences', 'contextIsolation=yes,backgroundThrottling=no,v8CacheOptions=bypassHeatCheckAndEagerCompile');
+    webview.setAttribute('webpreferences', 'contextIsolation=yes,devTools=no,backgroundThrottling=no,v8CacheOptions=bypassHeatCheckAndEagerCompile');
     
     this.setupWebviewEvents(webview, tab.id);
     
@@ -69,7 +69,7 @@ export const NavigationMixin = {
       return 'https://' + input;
     }
     
-    return this.buildSearchUrl ? this.buildSearchUrl(input) : `https://www.startpage.com/sp/search?query=${encodeURIComponent(input)}`;
+    return this.buildSearchUrl ? this.buildSearchUrl(input) : `https://search.brave.com/search?q=${encodeURIComponent(input)}&source=web`;
   },
 
   goBack() {
@@ -342,7 +342,7 @@ export const NavigationMixin = {
         break;
       case 'search':
         if (params.selectionText) {
-          this.createTab(this.buildSearchUrl ? this.buildSearchUrl(params.selectionText) : `https://www.startpage.com/sp/search?query=${encodeURIComponent(params.selectionText)}`);
+          this.createTab(this.buildSearchUrl ? this.buildSearchUrl(params.selectionText) : `https://search.brave.com/search?q=${encodeURIComponent(params.selectionText)}&source=web`);
         }
         break;
       case 'open-link':
@@ -398,9 +398,6 @@ export const NavigationMixin = {
           const url = webview.getURL?.();
           if (url && !url.startsWith('view-source:')) this.createTab(`view-source:${url}`);
         } catch (e) {}
-        break;
-      case 'inspect':
-        webview.inspectElement(params.x, params.y);
         break;
     }
   }

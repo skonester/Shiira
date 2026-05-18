@@ -34,7 +34,7 @@ export const UIPanelsMixin = {
   },
 
   handleMainMenuAction(action) {
-    const panelActions = ['history', 'password-anvil', 'ai-assistant', 'themes', 'import-chrome', 'about', 'shiira-palettes', 'tab-expose', 'private-tab'];
+    const panelActions = ['history', 'password-anvil', 'themes', 'import-chrome', 'about', 'shiira-palettes', 'tab-expose', 'private-tab'];
     const toggleActions = ['favorites', 'adblock', 'bookmarks-bar']; // Actions that don't close the menu
     const isOpeningPanel = panelActions.includes(action);
     const isToggleAction = toggleActions.includes(action);
@@ -70,18 +70,10 @@ export const UIPanelsMixin = {
         this.hideMainMenu(true); // Instant hide
         this.showTabExpose();
         break;
-      case 'ai-assistant':
-        this.hideMainMenu(true); // Instant hide
-        this.showAISettingsPanel();
-        break;
       case 'import-chrome':
         this.hideMainMenu(true); // Instant hide
         this.showChromeImportPanel();
         this.renderChromeImportPanel();
-        break;
-      case 'devtools':
-        this.hideMainMenu(true); // Instant hide
-        this.openDevTools();
         break;
       case 'about':
         this.hideMainMenu(true); // Instant hide
@@ -94,12 +86,6 @@ export const UIPanelsMixin = {
         this.toggleAdBlocker();
         break;
     }
-  },
-
-  openDevTools() {
-    // Open DevTools for the main window (docked) via IPC to main process
-    // This opens the same DevTools as Ctrl+Shift+I
-    window.shiiraAPI.openDevTools();
   },
 
   // Chrome Import panel
@@ -195,7 +181,27 @@ export const UIPanelsMixin = {
   },
 
   async checkForUpdates() {
-    await window.shiiraAPI.updates.checkForUpdates();
+    if (this.updateStatusElement) {
+      this.updateStatusElement.innerHTML = '<span class="update-checking">Checking for updates...</span>';
+      this.updateStatusElement.className = 'about-update-status checking';
+    }
+
+    try {
+      const result = await window.shiiraAPI.updates.checkForUpdates();
+      if (result?.success === false) {
+        this.handleUpdateStatus({
+          status: 'update-error',
+          error: result.error || 'Update check failed.'
+        });
+      }
+      return result;
+    } catch (error) {
+      this.handleUpdateStatus({
+        status: 'update-error',
+        error: error?.message || 'Update check failed.'
+      });
+      return { success: false, error: error?.message || 'Update check failed.' };
+    }
   },
 
   // Close all popups
@@ -210,7 +216,6 @@ export const UIPanelsMixin = {
     this.hidePasswordAnvilPanel();
     this.hidePasswordModal();
     this.hideChromeImportPanel();
-    this.hideAISettingsPanel();
     this.hideSuggestions();
     this.hideShiiraDrawer?.();
     this.hideTabExpose?.();

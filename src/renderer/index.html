@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' shiira-asset:; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src * data: blob: 'self' shiira-asset:; frame-src *; child-src *; connect-src 'self' https://www.startpage.com;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' shiira-asset:; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src * data: blob: 'self' shiira-asset:; frame-src *; child-src *; connect-src 'self' https://www.startpage.com https://search.brave.com;">
   <title>Shiira</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -64,7 +64,7 @@
         </div>
         <input type="text" id="url-input" placeholder="Search or enter URL" autocomplete="off" spellcheck="false">
         <div class="url-actions">
-          <div id="ad-counter" class="ad-counter hidden" title="Ads blocked on this page">
+          <div id="ad-counter" class="ad-counter hidden" title="Verified page blocks">
             <img src="shiira-asset://ui-icons/shield.svg" alt="" width="12" height="12">
             <span id="ad-counter-value">0</span>
           </div>
@@ -84,9 +84,6 @@
         <button id="btn-tab-expose" class="nav-btn" title="Tab Expose">
           <img class="nav-icon" src="shiira-asset://ui-icons/tabs.svg" alt="Tab Expose">
         </button>
-        <div id="ai-buttons" class="ai-buttons">
-          <!-- AI agent buttons will be dynamically added here -->
-        </div>
         <button id="btn-menu" class="nav-btn" title="Menu">
           <svg class="nav-menu-icon" width="16" height="16" viewBox="0 0 16 16">
             <circle cx="8" cy="3" r="1.5" fill="currentColor"/>
@@ -158,15 +155,20 @@
             <img src="shiira-asset://shiira.png" alt="Shiira Logo">
           </div>
           <div class="welcome-title">
-            <div class="welcome-title-small">welcome to</div>
+            <div class="welcome-title-small">quiet by default</div>
             <div class="welcome-title-large">Shiira</div>
           </div>
+          <p class="welcome-copy">A dark, personal browser for people who still want the web to feel like theirs.</p>
           <div class="search-box">
-            <input type="text" id="home-search" placeholder="Search Startpage...">
-            <img class="search-box-logo" src="shiira-asset://site-logos/Startpage.com_logo.svg" alt="Startpage">
+            <input type="text" id="home-search" placeholder="Search Brave...">
+            <img class="search-box-logo" src="shiira-asset://site-logos/brave-search.svg" alt="Brave">
           </div>
           <div class="search-engine-chips">
-            <button class="search-engine-chip active" data-engine="startpage">Startpage</button>
+            <button class="search-engine-chip active" data-engine="brave">Brave</button>
+            <button class="search-engine-chip" data-engine="startpage">Startpage</button>
+          </div>
+          <div class="bring-your-own-ai">
+            <span>AI is kept out of the browser chrome. Use your own tools, accounts, and judgment from the web.</span>
           </div>
         </div>
       </div>
@@ -260,10 +262,6 @@
       </div>
       <div class="context-menu-item" data-action="view-source">
         View Page Source
-      </div>
-      <div class="context-menu-item" data-action="inspect">
-        <img class="menu-icon" src="../../assets/ui-icons/developer.svg" width="16" height="16" alt="">
-        Inspect Element
       </div>
     </div>
 
@@ -478,15 +476,6 @@
         <img class="menu-icon" src="../../assets/ui-icons/shield.svg" width="16" height="16" alt="">
         Private Tab
       </div>
-      <div class="context-menu-item" data-action="ai-assistant">
-        <img class="menu-icon" src="../../assets/ui-icons/ai.svg" width="16" height="16" alt="">
-        AI Assistant
-      </div>
-      <div class="context-menu-separator"></div>
-      <div class="context-menu-item" data-action="devtools">
-        <img class="menu-icon" src="../../assets/ui-icons/developer.svg" width="16" height="16" alt="">
-        Developer Tools
-      </div>
       <div class="context-menu-separator"></div>
       <div class="context-menu-item" data-action="about">
         <img class="menu-icon" src="../../assets/ui-icons/about.svg" width="16" height="16" alt="">
@@ -511,9 +500,10 @@
         <div class="about-title">Shiira Browser</div>
         <div class="about-version" id="about-version">Version 0.1.0-alpha</div>
         <div class="about-description">
-          A lightweight, privacy-focused browser built by Shiira Project. 
-          Designed for speed, simplicity, and seamless AI integration.
+          Shiira is a dark, small-surface browser project for private browsing,
+          saved places, and fewer distractions.
         </div>
+        <a class="about-link" href="https://github.com/skonester/shiira" data-url="https://github.com/skonester/shiira">github.com/skonester/shiira</a>
         <div class="about-copyright">
           (C) 2026 Shiira Project
         </div>
@@ -888,40 +878,6 @@
       </div>
       <div id="chrome-import-content" class="panel-content">
         <!-- Content will be dynamically populated -->
-      </div>
-    </div>
-
-    <!-- AI Assistant Settings Panel -->
-    <div id="ai-settings-panel" class="panel hidden">
-      <div class="panel-header">
-        <h2>AI Assistant</h2>
-        <button id="btn-close-ai-settings" class="panel-close-btn" title="Close">
-          <svg width="14" height="14" viewBox="0 0 14 14">
-            <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.5"/>
-          </svg>
-        </button>
-      </div>
-      <div id="ai-settings-content" class="panel-content">
-        <!-- AI provider settings will be dynamically populated -->
-      </div>
-    </div>
-
-    <!-- AI Webview Panel (right side) -->
-    <div id="ai-webview-panel" class="ai-webview-panel hidden">
-      <div id="ai-panel-resize" class="ai-panel-resize"></div>
-      <div class="ai-webview-header">
-        <div class="ai-webview-title">
-          <span id="ai-webview-icon" class="ai-webview-icon"></span>
-          <span id="ai-webview-name">AI Assistant</span>
-        </div>
-        <button id="btn-ai-webview-close" class="ai-webview-close-btn" title="Close">
-          <svg width="14" height="14" viewBox="0 0 14 14">
-            <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.5"/>
-          </svg>
-        </button>
-      </div>
-      <div id="ai-webview-container" class="ai-webview-container">
-        <!-- Webview will be dynamically inserted here -->
       </div>
     </div>
 
