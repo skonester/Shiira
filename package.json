@@ -1,0 +1,122 @@
+{
+  "name": "shiira-browser",
+  "version": "0.2.6-alpha",
+  "description": "Shiira - A super dark browser inspired by the classic Shiira project",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --enable-logging",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux"
+  },
+  "keywords": [
+    "browser",
+    "chromium",
+    "electron",
+    "shiira",
+    "lightweight"
+  ],
+  "author": {
+    "name": "Shiira Project",
+    "email": "skonester@users.noreply.github.com"
+  },
+  "license": "GPL-3.0-only",
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.3",
+    "electron": "github:castlabs/electron-releases#v39.0.0+wvcus",
+    "electron-builder": "^24.9.1",
+    "jimp": "^1.6.0",
+    "rcedit": "^5.0.2"
+  },
+  "build": {
+    "appId": "com.skonester.shiira.browser",
+    "productName": "Shiira",
+    "copyright": "Copyright (C) 2026 Shiira Project",
+    "afterPack": "./build/afterPack.js",
+    "electronDist": "node_modules/electron/dist",
+    "electronVersion": "39.0.0",
+    "directories": {
+      "output": "dist"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "skonester",
+      "repo": "Shiira"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "assets",
+        "to": "assets"
+      },
+      {
+        "from": "filter-lists",
+        "to": "filter-lists"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "assets/shiira-logo.ico",
+      "executableName": "Shiira",
+      "legalTrademarks": "Shiira Project",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "installerIcon": "assets/shiira-logo.ico",
+      "uninstallerIcon": "assets/shiira-logo.ico",
+      "installerHeaderIcon": "assets/shiira-logo.ico",
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Shiira Browser",
+      "artifactName": "Shiira-Setup-${version}.${ext}",
+      "include": "build/installer/installer.nsh",
+      "installerSidebar": "build/installer/installer-sidebar.bmp",
+      "uninstallerSidebar": "build/installer/installer-sidebar.bmp",
+      "warningsAsErrors": false,
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "portable": {
+      "artifactName": "Shiira-${version}.${ext}"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "assets/icon.png",
+      "category": "Network"
+    }
+  },
+  "dependencies": {
+    "@ghostery/adblocker-electron": "^2.17.1",
+    "better-sqlite3": "^12.6.2",
+    "darkreader": "^4.9.125",
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.7.3",
+    "electron-widevinecdm": "^8.0.0",
+    "keytar": "^7.9.0",
+    "systeminformation": "^5.31.6",
+    "three": "^0.182.0"
+  }
+}

@@ -1,0 +1,641 @@
+/* =====================================================
+   Shiira Browser Installer
+   ===================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --bg-primary: #020308;
+    --bg-secondary: #080a16;
+    --bg-tertiary: #11152a;
+    --bg-hover: #18203a;
+    --accent: #28d7ef;
+    --accent-hover: #b85cff;
+    --accent-dark: #108aa0;
+    --text-primary: #f2fbff;
+    --text-secondary: #9fb4c1;
+    --text-dim: #62717f;
+    --border: #19243b;
+    --error: #ff4d9f;
+    --success: #64f4ba;
+}
+
+body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    background:
+        radial-gradient(circle at 20% 8%, rgba(40, 215, 239, 0.18), transparent 32%),
+        radial-gradient(circle at 86% 18%, rgba(184, 92, 255, 0.2), transparent 34%),
+        var(--bg-primary);
+    color: var(--text-primary);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    user-select: none;
+}
+
+/* ===== Custom Title Bar ===== */
+.title-bar {
+    height: 32px;
+    background: var(--bg-secondary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    -webkit-app-region: drag;
+    border-bottom: 1px solid var(--border);
+}
+
+.title-bar-drag {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-left: 12px;
+}
+
+.title-logo {
+    height: 16px;
+    width: auto;
+    filter: drop-shadow(0 0 10px rgba(40, 215, 239, 0.5));
+}
+
+.title-text {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.title-bar-buttons {
+    display: flex;
+    -webkit-app-region: no-drag;
+}
+
+.title-btn {
+    width: 46px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.title-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.title-btn.close:hover {
+    background: #E81123;
+    color: white;
+}
+
+.title-btn svg {
+    width: 12px;
+    height: 12px;
+}
+
+/* ===== Main Container ===== */
+.installer-container {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+/* ===== Sidebar ===== */
+.sidebar {
+    width: 200px;
+    background: linear-gradient(180deg, var(--bg-secondary) 0%, #03040b 100%);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 30px 20px 20px;
+    position: relative;
+    overflow: hidden;
+    border-right: 3px solid var(--accent);
+}
+
+.sidebar-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    z-index: 1;
+}
+
+.logo-container {
+    width: 80px;
+    height: 80px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.shiira-brand-logo {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 0 20px rgba(40, 215, 239, 0.42)) drop-shadow(0 0 30px rgba(184, 92, 255, 0.24));
+}
+
+.brand-title {
+    font-family: 'Cinzel', serif;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dark) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 30px rgba(40, 215, 239, 0.34);
+    margin-bottom: 4px;
+}
+
+.brand-subtitle {
+    font-size: 14px;
+    color: var(--text-secondary);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.sidebar-footer {
+    z-index: 1;
+    text-align: center;
+}
+
+.version {
+    font-size: 11px;
+    color: var(--text-dim);
+}
+
+/* Ember particles effect */
+.ember-particles {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.ember {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    background: var(--accent);
+    border-radius: 50%;
+    opacity: 0;
+    animation: float-up 4s ease-in infinite;
+    box-shadow: 0 0 6px var(--accent);
+}
+
+@keyframes float-up {
+    0% {
+        opacity: 0;
+        transform: translateY(0) scale(1);
+    }
+    10% {
+        opacity: 0.8;
+    }
+    90% {
+        opacity: 0.2;
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-300px) scale(0.3);
+    }
+}
+
+/* ===== Wizard Content ===== */
+.wizard-content {
+    flex: 1;
+    padding: 25px 35px 20px;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-primary);
+    position: relative;
+}
+
+.wizard-page {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+    animation: fadeIn 0.3s ease;
+}
+
+.wizard-page.active {
+    display: flex;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.page-title {
+    font-family: 'Cinzel', serif;
+    font-size: 26px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+
+.page-description {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 15px;
+    line-height: 1.4;
+}
+
+/* ===== Features List ===== */
+.features-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+.feature {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    transition: all 0.2s ease;
+}
+
+.feature:hover {
+    border-color: var(--accent);
+    background: var(--bg-tertiary);
+}
+
+.feature-icon {
+    font-size: 24px;
+    line-height: 1;
+}
+
+.feature-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.feature-text strong {
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.feature-text span {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* ===== Page Actions ===== */
+.page-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: auto;
+    padding-top: 15px;
+    flex-shrink: 0;
+}
+
+/* ===== Buttons ===== */
+.btn {
+    padding: 10px 24px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+    outline: none;
+}
+
+.btn-primary {
+    background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dark) 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba(40, 215, 239, 0.3);
+}
+
+.btn-primary:hover {
+    background: linear-gradient(180deg, var(--accent-hover) 0%, var(--accent) 100%);
+    box-shadow: 0 4px 12px rgba(184, 92, 255, 0.4);
+    transform: translateY(-1px);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+.btn-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--text-dim);
+}
+
+.btn-browse {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+}
+
+.btn-browse:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent);
+}
+
+.btn-finish {
+    min-width: 120px;
+}
+
+/* ===== Path Selector ===== */
+.path-selector {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.path-input {
+    flex: 1;
+    padding: 12px 15px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: 'Consolas', monospace;
+}
+
+.path-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.space-info {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 20px;
+}
+
+.path-error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 15px;
+    background: rgba(255, 77, 77, 0.1);
+    border: 1px solid var(--error);
+    border-radius: 6px;
+    margin-bottom: 20px;
+}
+
+.path-error.hidden {
+    display: none;
+}
+
+.error-icon {
+    font-size: 16px;
+}
+
+.error-text {
+    font-size: 13px;
+    color: var(--error);
+}
+
+/* ===== Progress Bar ===== */
+.progress-container {
+    margin: 30px 0;
+}
+
+.progress-bar {
+    height: 8px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent-dark) 0%, var(--accent) 100%);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+    box-shadow: 0 0 10px rgba(40, 215, 239, 0.5);
+}
+
+.progress-text {
+    font-size: 14px;
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.install-details {
+    font-size: 12px;
+    color: var(--text-dim);
+    font-family: 'Consolas', monospace;
+    padding: 15px;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    max-height: 150px;
+    overflow-y: auto;
+    word-break: break-word;
+}
+
+.install-details.error {
+    border-color: var(--error);
+    color: var(--error);
+}
+
+.progress-fill.error {
+    background: linear-gradient(90deg, #8B0000 0%, var(--error) 100%);
+    box-shadow: 0 0 10px rgba(255, 77, 77, 0.5);
+}
+
+/* ===== Complete Page ===== */
+.complete-icon {
+    display: flex;
+    justify-content: center;
+    margin: 20px 0 30px;
+}
+
+.checkmark {
+    width: 80px;
+    height: 80px;
+    animation: scaleIn 0.5s ease;
+}
+
+@keyframes scaleIn {
+    from { transform: scale(0); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+.checkmark circle {
+    stroke-dasharray: 190;
+    stroke-dashoffset: 190;
+    animation: drawCircle 0.6s ease forwards;
+}
+
+.checkmark path {
+    stroke-dasharray: 50;
+    stroke-dashoffset: 50;
+    animation: drawCheck 0.4s ease forwards 0.4s;
+}
+
+@keyframes drawCircle {
+    to { stroke-dashoffset: 0; }
+}
+
+@keyframes drawCheck {
+    to { stroke-dashoffset: 0; }
+}
+
+/* ===== Checkbox ===== */
+.launch-option {
+    margin: 20px 0;
+}
+
+.checkbox-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.checkbox-container input {
+    display: none;
+}
+
+.checkmark-box {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.checkbox-container input:checked + .checkmark-box {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.checkbox-container input:checked + .checkmark-box::after {
+    content: '✓';
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.checkbox-label {
+    color: var(--text-primary);
+}
+
+/* ===== Links ===== */
+.links {
+    margin: 20px 0;
+}
+
+.link {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 13px;
+    transition: color 0.2s ease;
+}
+
+.link:hover {
+    color: var(--accent-hover);
+    text-decoration: underline;
+}
+
+/* ===== Footer ===== */
+.footer {
+    height: 30px;
+    background: var(--bg-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-top: 1px solid var(--border);
+}
+
+.footer span {
+    font-size: 11px;
+    color: var(--text-dim);
+}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--bg-hover);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-dim);
+}
+
+/* ===== Uninstall Specific ===== */
+.uninstall-warning {
+    display: flex;
+    gap: 15px;
+    padding: 20px;
+    background: rgba(255, 77, 77, 0.1);
+    border: 1px solid rgba(255, 77, 77, 0.3);
+    border-radius: 8px;
+    margin: 20px 0;
+}
+
+.warning-icon {
+    font-size: 32px;
+    flex-shrink: 0;
+}
+
+.warning-text p {
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.warning-text .warning-note {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 0;
+}
+
+.btn-danger {
+    background: linear-gradient(180deg, #FF4D4D 0%, #CC3D3D 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba(255, 77, 77, 0.3);
+}
+
+.btn-danger:hover {
+    background: linear-gradient(180deg, #FF6666 0%, #FF4D4D 100%);
+    box-shadow: 0 4px 12px rgba(255, 77, 77, 0.4);
+    transform: translateY(-1px);
+}

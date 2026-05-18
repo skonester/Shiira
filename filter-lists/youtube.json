@@ -1,0 +1,213 @@
+[
+  {
+    "id": 1000,
+    "priority": 30,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*googlevideo.com/*ctier=L*"
+    },
+    "comment": "Block YouTube ad video streams (ctier=L indicates ad) - HIGH PRIORITY, all resource types"
+  },
+  {
+    "id": 1001,
+    "priority": 15,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*googlevideo.com/*&oad=*",
+      "initiatorDomains": ["youtube.com", "www.youtube.com"]
+    },
+    "comment": "Block YouTube ad video streams (oad parameter)"
+  },
+  {
+    "id": 1002,
+    "priority": 15,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*youtube.com/api/stats/ads*"
+    },
+    "comment": "Block YouTube ad stats/tracking"
+  },
+  {
+    "id": 1003,
+    "priority": 15,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*youtube.com/api/stats/playback*adformat*"
+    },
+    "comment": "Block YouTube ad playback stats"
+  },
+  {
+    "id": 1004,
+    "priority": 20,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*youtube.com/pagead/*"
+    },
+    "comment": "Block YouTube pagead tracking and viewthrough conversion URLs"
+  },
+  {
+    "id": 1005,
+    "priority": 15,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*youtube.com/ptracking*"
+    },
+    "comment": "Block YouTube ptracking"
+  },
+  {
+    "id": 1006,
+    "priority": 15,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*youtube.com/get_midroll_*"
+    },
+    "comment": "Block YouTube mid-roll ad requests"
+  },
+  {
+    "id": 1007,
+    "priority": 15,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*youtube.com/api/stats/qoe*adformat*"
+    },
+    "comment": "Block YouTube ad QoE stats"
+  },
+  {
+    "id": 1008,
+    "priority": 15,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*youtube.com/youtubei/v1/player/ad_break*"
+    },
+    "comment": "Block YouTube ad break API"
+  },
+  {
+    "id": 1009,
+    "priority": 15,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*static.doubleclick.net*"
+    },
+    "comment": "Block DoubleClick static assets"
+  },
+  {
+    "id": 1010,
+    "priority": 15,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*youtube.com/generate_204*ad*"
+    },
+    "comment": "Block YouTube ad beacons"
+  },
+  {
+    "id": 1011,
+    "priority": 15,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*youtube.com/csi_204*"
+    },
+    "comment": "Block YouTube CSI tracking"
+  },
+  {
+    "id": 1012,
+    "priority": 15,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*yt3.ggpht.com/ytc/*",
+      "resourceTypes": ["image"]
+    },
+    "comment": "Block YouTube ad thumbnails"
+  },
+  {
+    "id": 1013,
+    "priority": 15,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*youtube.com/get_video_info*adformat*"
+    },
+    "comment": "Block YouTube ad video info"
+  },
+  {
+    "id": 1014,
+    "priority": 15,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*youtube.com/*&ad_type=*"
+    },
+    "comment": "Block requests with ad_type parameter"
+  },
+  {
+    "id": 1015,
+    "priority": 15,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*youtube.com/*adunit*"
+    },
+    "comment": "Block YouTube adunit requests"
+  },
+  {
+    "id": 1016,
+    "priority": 15,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*youtube.com/youtubei/v1/log_event*"
+    },
+    "comment": "Block YouTube logging events (includes ad events)"
+  },
+  {
+    "id": 1017,
+    "priority": 15,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||googleads.g.doubleclick.net^"
+    },
+    "comment": "Block Google Ads DoubleClick"
+  },
+  {
+    "id": 1018,
+    "priority": 15,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||www.googleadservices.com^"
+    },
+    "comment": "Block Google Ad Services"
+  },
+  {
+    "id": 1019,
+    "priority": 15,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||youtubei.googleapis.com/youtubei/v1/player/ad_break*"
+    },
+    "comment": "Block YouTube API ad breaks"
+  },
+  {
+    "id": 1020,
+    "priority": 15,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*youtube.com/*&aitags=*"
+    },
+    "comment": "Block requests with ad aitags"
+  },
+  {
+    "id": 1021,
+    "priority": 30,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*ctier=L*"
+    },
+    "comment": "Block googlevideo ad streams (ctier=L) - HIGH PRIORITY, all resource types"
+  },
+  {
+    "id": 2000,
+    "priority": 25,
+    "action": { "type": "allow" },
+    "condition": {
+      "initiatorDomains": ["youtube.com", "www.youtube.com"],
+      "urlFilter": "*googlevideo.com/videoplayback*",
+      "excludedUrlFilter": "*ctier=L*"
+    },
+    "comment": "Allow non-ad video playback from YouTube (lower priority than ctier=L blocks)"
+  }
+]

@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' shiira-asset:; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src * data: blob: 'self' shiira-asset:; frame-src *; child-src *; connect-src 'self' https://suggestqueries.google.com;">
+  <title>Shiira</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Tab Bar with Window Controls -->
+    <div id="tabbar">
+      <div id="tabs-container">
+        <!-- Tabs will be dynamically added here -->
+      </div>
+      <button id="btn-new-tab" class="tab-btn" title="New Tab">
+        <img src="shiira-asset://ui-icons/plus.svg" alt="+" width="14" height="14">
+      </button>
+      <div class="tabbar-spacer"></div>
+      <div class="window-controls">
+        <button id="btn-minimize" class="window-btn" title="Minimize">
+          <svg width="12" height="12" viewBox="0 0 12 12">
+            <rect width="10" height="1" x="1" y="6" fill="currentColor"/>
+          </svg>
+        </button>
+        <button id="btn-maximize" class="window-btn" title="Maximize">
+          <svg width="12" height="12" viewBox="0 0 12 12">
+            <rect width="9" height="9" x="1.5" y="1.5" fill="none" stroke="currentColor" stroke-width="1"/>
+          </svg>
+        </button>
+        <button id="btn-close" class="window-btn close-btn" title="Close">
+          <svg width="12" height="12" viewBox="0 0 12 12">
+            <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <div id="navbar">
+      <div class="nav-buttons">
+        <button id="btn-back" class="nav-btn" title="Back" disabled>
+          <img class="nav-icon" src="shiira-asset://ui-icons/back.svg" alt="Back">
+        </button>
+        <button id="btn-forward" class="nav-btn" title="Forward" disabled>
+          <img class="nav-icon" src="shiira-asset://ui-icons/forward.svg" alt="Forward">
+        </button>
+        <button id="btn-reload" class="nav-btn" title="Refresh">
+          <img class="nav-home-icon" src="shiira-asset://ui-icons/refresh.svg" alt="Refresh">
+        </button>
+        <button id="btn-home" class="nav-btn" title="Home">
+          <img class="nav-home-icon" src="shiira-asset://ui-icons/home.svg" alt="Home">
+        </button>
+      </div>
+      <div class="url-container">
+        <div class="security-indicator" id="security-indicator">
+          <svg width="14" height="14" viewBox="0 0 14 14">
+            <path d="M7 1L2 3v4c0 3.5 2.5 6 5 7 2.5-1 5-3.5 5-7V3L7 1z" stroke="currentColor" stroke-width="1" fill="none"/>
+          </svg>
+        </div>
+        <input type="text" id="url-input" placeholder="Search or enter URL" autocomplete="off" spellcheck="false">
+        <div class="url-actions">
+          <div id="ad-counter" class="ad-counter hidden" title="Ads blocked on this page">
+            <img src="shiira-asset://ui-icons/shield.svg" alt="" width="12" height="12">
+            <span id="ad-counter-value">0</span>
+          </div>
+          <button id="btn-bookmark" class="url-action-btn" title="Bookmark this page">
+            <img id="bookmark-icon" class="url-action-icon" src="shiira-asset://ui-icons/bookmark.svg" alt="Bookmark" width="16" height="16">
+          </button>
+        </div>
+        <div id="url-suggestions" class="url-suggestions hidden"></div>
+      </div>
+      <div class="nav-actions">
+        <button id="btn-favorites" class="nav-btn favorites-btn hidden" title="Favorites">
+          <img class="nav-icon" src="shiira-asset://ui-icons/heart.svg" alt="Favorites">
+        </button>
+        <button id="btn-shiira-drawer" class="nav-btn" title="Shiira Palettes">
+          <img class="nav-icon" src="shiira-asset://ui-icons/bookmark.svg" alt="Shiira Palettes">
+        </button>
+        <button id="btn-tab-expose" class="nav-btn" title="Tab Expose">
+          <img class="nav-icon" src="shiira-asset://ui-icons/tabs.svg" alt="Tab Expose">
+        </button>
+        <div id="ai-buttons" class="ai-buttons">
+          <!-- AI agent buttons will be dynamically added here -->
+        </div>
+        <button id="btn-menu" class="nav-btn" title="Menu">
+          <svg class="nav-menu-icon" width="16" height="16" viewBox="0 0 16 16">
+            <circle cx="8" cy="3" r="1.5" fill="currentColor"/>
+            <circle cx="8" cy="8" r="1.5" fill="currentColor"/>
+            <circle cx="8" cy="13" r="1.5" fill="currentColor"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Bookmark Popup Overlay -->
+    <div id="bookmark-popup-overlay" class="modal-overlay hidden"></div>
+
+    <!-- Bookmark Popup -->
+    <div id="bookmark-popup" class="bookmark-popup hidden">
+      <div class="bookmark-popup-header">
+        <span class="bookmark-popup-title">Add Bookmark</span>
+      </div>
+      <div class="bookmark-popup-content">
+        <div class="bookmark-field">
+          <label for="bookmark-name">Name</label>
+          <input type="text" id="bookmark-name" placeholder="Bookmark name">
+        </div>
+        <div class="bookmark-field">
+          <label for="bookmark-url">URL</label>
+          <input type="text" id="bookmark-url" placeholder="URL" readonly>
+        </div>
+        <div class="bookmark-field">
+          <label for="bookmark-folder">Folder</label>
+          <select id="bookmark-folder">
+            <option value="">Bookmarks Bar</option>
+          </select>
+        </div>
+        <div class="bookmark-field bookmark-new-folder hidden" id="new-folder-field">
+          <label for="bookmark-new-folder-name">New Folder Name</label>
+          <input type="text" id="bookmark-new-folder-name" placeholder="Folder name">
+        </div>
+      </div>
+      <div class="bookmark-popup-actions">
+        <button id="bookmark-new-folder-btn" class="bookmark-btn bookmark-btn-secondary">New Folder</button>
+        <div class="bookmark-popup-actions-right">
+          <button id="bookmark-remove-btn" class="bookmark-btn bookmark-btn-danger hidden">Remove</button>
+          <button id="bookmark-popup-cancel" class="bookmark-btn bookmark-btn-secondary">Cancel</button>
+          <button id="bookmark-save-btn" class="bookmark-btn bookmark-btn-primary">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bookmarks Bar -->
+    <div id="bookmarks-bar" class="bookmarks-bar hidden">
+      <button id="bookmarks-scroll-left" class="bookmarks-scroll-arrow bookmarks-scroll-left hidden">
+        <img src="shiira-asset://ui-icons/arrow-left.svg" alt="Scroll left">
+      </button>
+      <div class="bookmarks-container" id="bookmarks-container">
+        <!-- Bookmarks will be added here dynamically -->
+      </div>
+      <button id="bookmarks-scroll-right" class="bookmarks-scroll-arrow bookmarks-scroll-right hidden">
+        <img src="shiira-asset://ui-icons/arrow-right.svg" alt="Scroll right">
+      </button>
+    </div>
+
+    <!-- Browser Content Area -->
+    <div id="browser-content">
+      <!-- Webviews will be dynamically added here -->
+      <div id="welcome-page" class="welcome">
+        <canvas id="particle-canvas"></canvas>
+        <div class="welcome-content">
+          <div class="shiira-logo">
+            <img src="shiira-asset://shiira.png" alt="Shiira Logo">
+          </div>
+          <div class="welcome-title">
+            <div class="welcome-title-small">welcome to</div>
+            <div class="welcome-title-large">Shiira</div>
+          </div>
+          <div class="search-box">
+            <input type="text" id="home-search" placeholder="Search the web...">
+            <img class="search-box-logo" src="shiira-asset://site-logos/Google.svg" alt="Google">
+          </div>
+          <div class="search-engine-chips">
+            <button class="search-engine-chip active" data-engine="google">Google</button>
+            <button class="search-engine-chip" data-engine="duckduckgo">DuckDuckGo</button>
+            <button class="search-engine-chip" data-engine="brave">Brave</button>
+            <button class="search-engine-chip" data-engine="wikipedia">Wikipedia</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status Bar -->
+    <div id="statusbar">
+      <span id="status-text">Ready</span>
+      <span id="status-info"></span>
+    </div>
+
+    <!-- Tab Context Menu -->
+    <div id="tab-context-menu" class="context-menu hidden">
+      <div class="context-menu-item" data-action="new-tab-right">New Tab to the Right</div>
+      <div class="context-menu-item" data-action="move-to-new-window">Move Tab to new Window</div>
+      <div class="context-menu-separator"></div>
+      <div class="context-menu-item" data-action="reload">Reload</div>
+      <div class="context-menu-item" data-action="duplicate">Duplicate</div>
+      <div class="context-menu-item" data-action="mute">Mute this Tab</div>
+      <div class="context-menu-separator"></div>
+      <div class="context-menu-item" data-action="close">Close</div>
+      <div class="context-menu-item" data-action="close-others">Close other Tabs</div>
+      <div class="context-menu-item" data-action="close-right">Close Tabs to the right</div>
+    </div>
+
+    <!-- Webview Context Menu -->
+    <div id="webview-context-menu" class="context-menu hidden">
+      <div class="context-menu-item" data-action="back" id="ctx-back">
+        <img class="menu-icon" src="../../assets/ui-icons/back.svg" width="16" height="16" alt="">
+        Back
+      </div>
+      <div class="context-menu-item" data-action="forward" id="ctx-forward">
+        <img class="menu-icon" src="../../assets/ui-icons/forward.svg" width="16" height="16" alt="">
+        Forward
+      </div>
+      <div class="context-menu-item" data-action="reload">
+        <img class="menu-icon" src="../../assets/ui-icons/refresh.svg" width="16" height="16" alt="">
+        Reload
+      </div>
+      <div class="context-menu-separator"></div>
+      <div class="context-menu-item" data-action="copy-link" id="ctx-copy-link">
+        Copy Link Address
+      </div>
+      <div class="context-menu-item" data-action="open-link-new-tab" id="ctx-open-link">
+        Open Link in New Tab
+      </div>
+      <div class="context-menu-separator" id="ctx-link-separator"></div>
+      <div class="context-menu-item" data-action="copy">
+        Copy
+      </div>
+      <div class="context-menu-item" data-action="paste">
+        Paste
+      </div>
+      <div class="context-menu-item" data-action="select-all">
+        Select All
+      </div>
+      <div class="context-menu-separator"></div>
+      <div class="context-menu-item" data-action="view-source">
+        View Page Source
+      </div>
+      <div class="context-menu-item" data-action="inspect">
+        <img class="menu-icon" src="../../assets/ui-icons/developer.svg" width="16" height="16" alt="">
+        Inspect Element
+      </div>
+    </div>
+
+    <!-- Bookmark Context Menu -->
+    <div id="bookmark-context-menu" class="context-menu hidden">
+      <div class="context-menu-item" data-action="bookmark-open">
+        <img class="menu-icon" src="shiira-asset://ui-icons/globe.svg" width="16" height="16" alt="">
+        Open
+      </div>
+      <div class="context-menu-item" data-action="bookmark-open-new-tab">
+        <img class="menu-icon" src="shiira-asset://ui-icons/plus.svg" width="16" height="16" alt="">
+        Open in New Tab
+      </div>
+      <div class="context-menu-separator"></div>
+      <div class="context-menu-item" data-action="bookmark-edit">
+        <img class="menu-icon" src="shiira-asset://ui-icons/edit.svg" width="16" height="16" alt="">
+        Edit
+      </div>
+      <div class="context-menu-item" data-action="bookmark-move">
+        <img class="menu-icon" src="shiira-asset://ui-icons/folder.svg" width="16" height="16" alt="">
+        Move to Folder
+      </div>
+      <div class="context-menu-separator"></div>
+      <div class="context-menu-item danger" data-action="bookmark-delete">
+        <img class="menu-icon" src="shiira-asset://ui-icons/delete.svg" width="16" height="16" alt="">
+        Delete
+      </div>
+    </div>
+
+    <!-- Bookmarks Bar Context Menu (right-click on empty space) -->
+    <div id="bookmarks-bar-context-menu" class="context-menu hidden">
+      <div class="context-menu-item" data-action="bar-add-folder">
+        <img class="menu-icon" src="shiira-asset://ui-icons/folder.svg" width="16" height="16" alt="">
+        Add New Folder
+      </div>
+      <div class="context-menu-separator"></div>
+      <div class="context-menu-item" data-action="bar-import">
+        <img class="menu-icon" src="shiira-asset://ui-icons/import.svg" width="16" height="16" alt="">
+        Import Bookmarks
+      </div>
+      <div class="context-menu-separator"></div>
+      <div class="context-menu-item" data-action="bar-hide">
+        <img class="menu-icon" src="shiira-asset://ui-icons/eye-off.svg" width="16" height="16" alt="">
+        Hide Bookmarks Bar
+      </div>
+    </div>
+
+    <!-- Folder Context Menu -->
+    <div id="folder-context-menu" class="context-menu hidden">
+      <div class="context-menu-item" data-action="folder-open-all">
+        <img class="menu-icon" src="shiira-asset://ui-icons/tabs.svg" width="16" height="16" alt="">
+        Open All in New Tabs
+      </div>
+      <div class="context-menu-separator"></div>
+      <div class="context-menu-item" data-action="folder-rename">
+        <img class="menu-icon" src="shiira-asset://ui-icons/edit.svg" width="16" height="16" alt="">
+        Rename Folder
+      </div>
+      <div class="context-menu-separator"></div>
+      <div class="context-menu-item danger" data-action="folder-delete">
+        <img class="menu-icon" src="shiira-asset://ui-icons/delete.svg" width="16" height="16" alt="">
+        Delete Folder
+      </div>
+    </div>
+
+    <!-- Add Folder Modal -->
+    <div id="add-folder-overlay" class="modal-overlay hidden"></div>
+    <div id="add-folder-modal" class="modal-container add-folder-modal-container hidden">
+      <div class="modal-header">
+        <h2 class="modal-title">Add New Folder</h2>
+      </div>
+      <div class="modal-content">
+        <div class="bookmark-field">
+          <label for="add-folder-name">Folder Name</label>
+          <input type="text" id="add-folder-name" placeholder="Enter folder name">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="add-folder-cancel-btn" class="panel-btn">Cancel</button>
+        <button id="add-folder-save-btn" class="panel-btn primary">Create Folder</button>
+      </div>
+    </div>
+
+    <!-- Bookmark Edit Modal -->
+    <div id="bookmark-edit-overlay" class="modal-overlay hidden"></div>
+    <div id="bookmark-edit-modal" class="modal-container bookmark-edit-modal-container hidden">
+      <div class="modal-header">
+        <h2 class="modal-title">Edit Bookmark</h2>
+      </div>
+      <div class="modal-content">
+        <div class="bookmark-edit-icon-section">
+          <div class="bookmark-edit-icon-preview" id="bookmark-edit-icon-preview">
+            <img src="../assets/ui-icons/globe.svg" alt="Bookmark icon">
+          </div>
+          <div class="bookmark-edit-icon-actions">
+            <button id="bookmark-edit-upload-btn" class="bookmark-btn bookmark-btn-secondary">Upload Icon</button>
+            <button id="bookmark-edit-reset-btn" class="bookmark-btn bookmark-btn-secondary">Reset to Favicon</button>
+            <input type="file" id="bookmark-edit-icon-input" accept=".png,.svg,.jpg,.jpeg,.ico,.webp" style="display: none;">
+          </div>
+        </div>
+        <div class="bookmark-field">
+          <label for="bookmark-edit-title">Title</label>
+          <input type="text" id="bookmark-edit-title" placeholder="Bookmark title">
+        </div>
+        <div class="bookmark-field">
+          <label for="bookmark-edit-url">URL</label>
+          <input type="text" id="bookmark-edit-url" placeholder="https://example.com">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="bookmark-edit-cancel-btn" class="bookmark-btn bookmark-btn-secondary">Cancel</button>
+        <button id="bookmark-edit-save-btn" class="bookmark-btn bookmark-btn-primary">Save Changes</button>
+      </div>
+    </div>
+
+    <!-- Text Input Context Menu -->
+    <div id="text-context-menu" class="context-menu hidden">
+      <div class="context-menu-item" data-action="undo">
+        <img class="menu-icon" src="shiira-asset://ui-icons/undo.svg" width="16" height="16" alt="">
+        Undo
+      </div>
+      <div class="context-menu-item" data-action="redo">
+        <img class="menu-icon" src="shiira-asset://ui-icons/redo.svg" width="16" height="16" alt="">
+        Redo
+      </div>
+      <div class="context-menu-separator"></div>
+      <div class="context-menu-item" data-action="cut">
+        <img class="menu-icon" src="shiira-asset://ui-icons/cut.svg" width="16" height="16" alt="">
+        Cut
+      </div>
+      <div class="context-menu-item" data-action="copy">
+        <img class="menu-icon" src="shiira-asset://ui-icons/copy.svg" width="16" height="16" alt="">
+        Copy
+      </div>
+      <div class="context-menu-item" data-action="paste">
+        <img class="menu-icon" src="shiira-asset://ui-icons/paste.svg" width="16" height="16" alt="">
+        Paste
+      </div>
+      <div class="context-menu-item" data-action="delete">
+        <img class="menu-icon" src="shiira-asset://ui-icons/delete.svg" width="16" height="16" alt="">
+        Delete
+      </div>
+      <div class="context-menu-separator"></div>
+      <div class="context-menu-item" data-action="select-all">
+        <img class="menu-icon" src="shiira-asset://ui-icons/select-all.svg" width="16" height="16" alt="">
+        Select All
+      </div>
+    </div>
+
+    <!-- Password Autofill Popup (rendered in browser UI layer) -->
+    <div id="password-autofill-popup" class="password-autofill-popup hidden">
+      <!-- Items will be dynamically added -->
+    </div>
+
+    <!-- Context Menu Overlay (for capturing clicks outside context menus) -->
+    <div id="context-menu-overlay" class="context-menu-overlay hidden"></div>
+
+    <!-- Main Menu Dropdown -->
+    <div id="main-menu" class="context-menu hidden">
+      <div class="menu-brightness-control">
+        <svg class="brightness-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="5"/>
+          <line x1="12" y1="1" x2="12" y2="3"/>
+          <line x1="12" y1="21" x2="12" y2="23"/>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+          <line x1="1" y1="12" x2="3" y2="12"/>
+          <line x1="21" y1="12" x2="23" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+        <input type="range" id="brightness-slider" min="20" max="100" value="100" class="brightness-slider">
+      </div>
+      <div class="context-menu-separator"></div>
+      <div class="context-menu-item" data-action="history">
+        <img class="menu-icon" src="../../assets/ui-icons/history.svg" width="16" height="16" alt="">
+        History
+      </div>
+      <div class="context-menu-item" data-action="password-anvil">
+        <img class="menu-icon" src="../../assets/ui-icons/shield.svg" width="16" height="16" alt="">
+        Password Anvil
+      </div>
+      <div class="context-menu-item has-toggle" data-action="favorites">
+        <img class="menu-icon" src="../../assets/ui-icons/heart.svg" width="16" height="16" alt="">
+        Favorites
+        <span class="menu-toggle" id="favorites-toggle"></span>
+      </div>
+      <div class="context-menu-item has-toggle" data-action="bookmarks-bar">
+        <img class="menu-icon" src="../../assets/ui-icons/bookmark.svg" width="16" height="16" alt="">
+        Bookmarks
+        <span class="menu-toggle" id="bookmarks-bar-toggle"></span>
+      </div>
+      <div class="context-menu-item has-toggle" data-action="adblock">
+        <img class="menu-icon" src="../../assets/ui-icons/shield.svg" width="16" height="16" alt="">
+        Ad Blocker
+        <span class="adblock-stats" id="adblock-stats"></span>
+        <span class="menu-toggle" id="adblock-toggle"></span>
+      </div>
+      <div class="context-menu-item" data-action="themes">
+        <img class="menu-icon" src="../../assets/ui-icons/customize.svg" width="16" height="16" alt="">
+        Themes
+      </div>
+      <div class="context-menu-item" data-action="shiira-palettes">
+        <img class="menu-icon" src="../../assets/ui-icons/bookmark.svg" width="16" height="16" alt="">
+        Shiira Palettes
+      </div>
+      <div class="context-menu-item" data-action="tab-expose">
+        <img class="menu-icon" src="../../assets/ui-icons/tabs.svg" width="16" height="16" alt="">
+        Tab Expose
+      </div>
+      <div class="context-menu-item" data-action="private-tab">
+        <img class="menu-icon" src="../../assets/ui-icons/shield.svg" width="16" height="16" alt="">
+        Private Tab
+      </div>
+      <div class="context-menu-item" data-action="ai-assistant">
+        <img class="menu-icon" src="../../assets/ui-icons/ai.svg" width="16" height="16" alt="">
+        AI Assistant
+      </div>
+      <div class="context-menu-separator"></div>
+      <div class="context-menu-item" data-action="devtools">
+        <img class="menu-icon" src="../../assets/ui-icons/developer.svg" width="16" height="16" alt="">
+        Developer Tools
+      </div>
+      <div class="context-menu-separator"></div>
+      <div class="context-menu-item" data-action="about">
+        <img class="menu-icon" src="../../assets/ui-icons/about.svg" width="16" height="16" alt="">
+        About Shiira
+      </div>
+    </div>
+
+    <!-- About Shiira Panel -->
+    <div id="about-panel" class="panel hidden">
+      <div class="panel-header">
+        <h2>About Shiira</h2>
+        <button id="btn-close-about" class="panel-close-btn" title="Close">
+          <svg width="14" height="14" viewBox="0 0 14 14">
+            <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+        </button>
+      </div>
+      <div class="panel-content about-content">
+        <div class="about-logo">
+          <img src="shiira-asset://shiira.png" alt="Shiira Logo" width="80" height="80">
+        </div>
+        <div class="about-title">Shiira Browser</div>
+        <div class="about-version" id="about-version">Version 0.1.0-alpha</div>
+        <div class="about-description">
+          A lightweight, privacy-focused browser built by Shiira Project. 
+          Designed for speed, simplicity, and seamless AI integration.
+        </div>
+        <div class="about-copyright">
+          (C) 2026 Shiira Project
+        </div>
+        <button id="btn-check-updates" class="about-update-btn">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 2v3M8 11v3M2 8h3M11 8h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M4.5 4.5l2 2M9.5 9.5l2 2M4.5 11.5l2-2M9.5 6.5l2-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Check for Updates
+        </button>
+        <div id="update-status" class="about-update-status"></div>
+      </div>
+    </div>
+
+    <!-- Password Anvil Panel -->
+    <div id="password-anvil-panel" class="panel hidden">
+      <div class="panel-header">
+        <h2>Password Anvil</h2>
+        <button id="btn-close-password-anvil" class="panel-close-btn" title="Close">
+          <svg width="14" height="14" viewBox="0 0 14 14">
+            <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+        </button>
+      </div>
+      <div class="panel-toolbar">
+        <input type="text" id="password-search" placeholder="Search passwords...">
+        <button id="btn-add-password" class="panel-btn panel-btn-icon" title="Add new password">
+          <img src="shiira-asset://ui-icons/plus.svg" alt="Add new">
+        </button>
+        <button id="btn-import-passwords" class="panel-btn" title="Import from CSV">Import</button>
+        <button id="btn-delete-all-passwords" class="panel-btn panel-btn-danger" title="Delete all">
+          <img src="shiira-asset://ui-icons/delete.svg" alt="Delete all">
+        </button>
+      </div>
+      <div id="password-list" class="panel-list">
+        <!-- Password items will be dynamically added here -->
+      </div>
+    </div>
+
+    <!-- Password Add/Edit Modal -->
+    <div id="password-modal" class="modal-overlay hidden">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3 id="password-modal-title">Add Password</h3>
+          <button id="btn-close-password-modal" class="panel-close-btn" title="Close">
+            <svg width="14" height="14" viewBox="0 0 14 14">
+              <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="password-edit-id">
+          <div class="form-group">
+            <label for="password-url">Website URL</label>
+            <input type="text" id="password-url" placeholder="https://example.com">
+          </div>
+          <div class="form-group">
+            <label for="password-username">Username</label>
+            <input type="text" id="password-username" placeholder="username@example.com">
+          </div>
+          <div class="form-group">
+            <label for="password-password">Password</label>
+            <input type="password" id="password-password" placeholder="********">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="btn-cancel-password" class="panel-btn">Cancel</button>
+          <button id="btn-save-password" class="panel-btn primary">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <input type="file" id="password-file-input" accept=".csv" style="display: none;">
+
+    <!-- Password Import Modal -->
+    <div id="password-import-modal" class="modal-overlay hidden">
+      <div class="modal-dialog modal-dialog-large">
+        <div class="modal-header">
+          <h3>Import Passwords</h3>
+          <button id="btn-close-import-modal" class="panel-close-btn" title="Close">
+            <svg width="14" height="14" viewBox="0 0 14 14">
+              <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <!-- Instructions -->
+          <div id="import-instructions" class="import-section">
+            <h4>How to Export Passwords</h4>
+            <div class="import-instructions-list">
+              <div class="import-browser-instructions">
+                <strong>Chrome / Edge / Brave / Opera:</strong>
+                <ol>
+                  <li>Open Settings → Passwords</li>
+                  <li>Click the three dots (⋮) next to "Saved Passwords"</li>
+                  <li>Select "Export passwords"</li>
+                  <li>Save the CSV file</li>
+                </ol>
+              </div>
+            </div>
+            <div class="import-note">
+              <strong>Note:</strong> CSV format should have columns: name, url, username, password
+            </div>
+            <button id="btn-select-import-file" class="panel-btn primary">Select File to Import</button>
+          </div>
+
+          <!-- Preview Section -->
+          <div id="import-preview" class="import-section hidden">
+            <div class="import-preview-header">
+              <h4>Select Passwords to Import</h4>
+              <div class="import-preview-actions">
+                <button id="btn-select-all-import" class="panel-btn-link">Select All</button>
+                <button id="btn-deselect-all-import" class="panel-btn-link">Deselect All</button>
+              </div>
+            </div>
+            <div id="import-preview-list" class="import-preview-list">
+              <!-- Preview items will be dynamically added here -->
+            </div>
+            <div class="import-preview-footer">
+              <span id="import-selection-count">0 of 0 selected</span>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="btn-cancel-import" class="panel-btn">Cancel</button>
+          <button id="btn-import-selected" class="panel-btn primary" disabled>Import Selected</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmation-modal" class="shiira-modal hidden">
+      <div class="shiira-modal-content">
+        <div class="shiira-modal-header">
+          <h3 id="confirmation-modal-title">Confirm Action</h3>
+        </div>
+        <div class="shiira-modal-body">
+          <p id="confirmation-modal-message">Are you sure?</p>
+        </div>
+        <div class="shiira-modal-footer">
+          <button id="confirmation-modal-cancel" class="modal-btn modal-btn-secondary">Cancel</button>
+          <button id="confirmation-modal-confirm" class="modal-btn modal-btn-primary">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notification Modal -->
+    <div id="notification-modal" class="shiira-modal hidden">
+      <div class="shiira-modal-content shiira-modal-notification">
+        <div class="shiira-modal-header">
+          <h3 id="notification-modal-title">Notification</h3>
+        </div>
+        <div class="shiira-modal-body">
+          <p id="notification-modal-message">Action completed successfully.</p>
+        </div>
+        <div class="shiira-modal-footer">
+          <button id="notification-modal-ok" class="modal-btn modal-btn-primary">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Prompt Modal -->
+    <div id="prompt-modal" class="modal-container prompt-modal-container hidden">
+      <div class="modal-header">
+        <h2 class="modal-title" id="prompt-modal-title">Enter Value</h2>
+      </div>
+      <div class="modal-content">
+        <p id="prompt-modal-message" class="prompt-modal-message">Please enter a value:</p>
+        <div class="prompt-field">
+          <input type="text" id="prompt-modal-input" placeholder="">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="prompt-modal-cancel" class="bookmark-btn bookmark-btn-secondary">Cancel</button>
+        <button id="prompt-modal-confirm" class="bookmark-btn bookmark-btn-primary">OK</button>
+      </div>
+    </div>
+
+    <!-- Themes Modal -->
+    <div id="themes-modal" class="shiira-modal hidden">
+      <div class="shiira-modal-content">
+        <div class="shiira-modal-header themes-modal-header">
+          <h3>Themes</h3>
+          <button id="btn-close-themes-modal" class="panel-close-btn" title="Close">
+            <svg width="14" height="14" viewBox="0 0 14 14">
+              <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+          </button>
+        </div>
+        <div class="shiira-modal-body">
+          <p class="themes-description">Customize your Shiira</p>
+          <div class="themes-grid">
+            <div class="theme-option selected" data-theme="shiira-night">
+              <div class="theme-info">
+                <div class="theme-name">Shiira Night</div>
+              </div>
+              <div class="theme-preview">
+                <div class="theme-colors-gradient shiira-night-gradient"></div>
+              </div>
+              <div class="theme-checkmark">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M16.6668 5L7.50016 14.1667L3.3335 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+            </div>
+            <div class="theme-option" data-theme="shiira-pearl">
+              <div class="theme-info">
+                <div class="theme-name">Shiira Pearl</div>
+              </div>
+              <div class="theme-preview">
+                <div class="theme-colors-gradient shiira-pearl-gradient"></div>
+              </div>
+              <div class="theme-checkmark">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M16.6668 5L7.50016 14.1667L3.3335 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+            </div>
+            <div class="theme-option" data-theme="shiira-classic-dark">
+              <div class="theme-info">
+                <div class="theme-name">Shiira Classic Dark</div>
+              </div>
+              <div class="theme-preview">
+                <div class="theme-colors-gradient shiira-classic-dark-gradient"></div>
+              </div>
+              <div class="theme-checkmark">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M16.6668 5L7.50016 14.1667L3.3335 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+            </div>
+            <div class="theme-option" data-theme="abyssal-red">
+              <div class="theme-info">
+                <div class="theme-name">Abyssal Red</div>
+              </div>
+              <div class="theme-preview">
+                <div class="theme-colors-gradient abyssal-red-gradient"></div>
+              </div>
+              <div class="theme-checkmark">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M16.6668 5L7.50016 14.1667L3.3335 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+            </div>
+            <div class="theme-option" data-theme="steelheart">
+              <div class="theme-info">
+                <div class="theme-name">Steelheart</div>
+              </div>
+              <div class="theme-preview">
+                <div class="theme-colors-gradient steelheart-gradient"></div>
+              </div>
+              <div class="theme-checkmark">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M16.6668 5L7.50016 14.1667L3.3335 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+            </div>
+            <div class="theme-option" data-theme="rustveil">
+              <div class="theme-info">
+                <div class="theme-name">Rustveil</div>
+              </div>
+              <div class="theme-preview">
+                <div class="theme-colors-gradient rustveil-gradient"></div>
+              </div>
+              <div class="theme-checkmark">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M16.6668 5L7.50016 14.1667L3.3335 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+            </div>
+            <div class="theme-option" data-theme="sakura-shadow">
+              <div class="theme-info">
+                <div class="theme-name">Sakura Shadow</div>
+              </div>
+              <div class="theme-preview">
+                <div class="theme-colors-gradient sakura-shadow-gradient"></div>
+              </div>
+              <div class="theme-checkmark">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M16.6668 5L7.50016 14.1667L3.3335 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Shiira Palette Drawer -->
+    <aside id="shiira-drawer" class="shiira-drawer hidden">
+      <div class="shiira-drawer-header">
+        <div>
+          <div class="shiira-drawer-kicker">Shiira</div>
+          <h2>Palette Drawer</h2>
+        </div>
+        <button id="btn-close-shiira-drawer" class="panel-close-btn" title="Close">
+          <svg width="14" height="14" viewBox="0 0 14 14">
+            <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+        </button>
+      </div>
+      <div class="shiira-palette-tabs">
+        <button class="shiira-palette-tab active" data-palette="bookmarks">Bookmarks</button>
+        <button class="shiira-palette-tab" data-palette="history">History</button>
+        <button class="shiira-palette-tab" data-palette="cache">Cache</button>
+        <button class="shiira-palette-tab" data-palette="rss">RSS</button>
+      </div>
+      <div class="shiira-palette-panel active" data-palette-panel="bookmarks">
+        <button class="shiira-drawer-action" data-action="open-bookmarks">Show bookmarks bar</button>
+        <p>Classic side-drawer access for saved places.</p>
+      </div>
+      <div class="shiira-palette-panel" data-palette-panel="history">
+        <button class="shiira-drawer-action" data-action="open-history">Open history</button>
+        <p>Jump back through recently visited pages.</p>
+      </div>
+      <div class="shiira-palette-panel" data-palette-panel="cache">
+        <button class="shiira-drawer-action" data-action="clear-cache">Clear cache</button>
+        <button class="shiira-drawer-action" data-action="clear-cookies">Clear cookies</button>
+        <button class="shiira-drawer-action" data-action="clear-storage">Clear site storage</button>
+        <label class="shiira-toggle-row">
+          <input type="checkbox" id="shiira-clear-on-exit">
+          <span>Clear cookies and cache on exit</span>
+        </label>
+        <p id="shiira-cache-status" class="shiira-cache-status">Cache controls mirror a classic Shiira preference pane.</p>
+      </div>
+      <div class="shiira-palette-panel" data-palette-panel="rss">
+        <p>RSS drawer placeholder for the original Shiira reader spirit.</p>
+      </div>
+    </aside>
+
+    <!-- Tab Expose Overlay -->
+    <div id="tab-expose-overlay" class="tab-expose-overlay hidden">
+      <div class="tab-expose-header">
+        <h2>Tab Expose</h2>
+        <button id="btn-close-tab-expose" class="panel-close-btn" title="Close">
+          <svg width="14" height="14" viewBox="0 0 14 14">
+            <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+        </button>
+      </div>
+      <div id="tab-expose-grid" class="tab-expose-grid"></div>
+    </div>
+
+    <!-- History Panel -->
+    <div id="history-panel" class="panel hidden">
+      <div class="panel-header">
+        <h2>History</h2>
+        <button id="btn-close-history" class="panel-close-btn" title="Close">
+          <svg width="14" height="14" viewBox="0 0 14 14">
+            <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+        </button>
+      </div>
+      <div class="panel-toolbar">
+        <input type="text" id="history-search" placeholder="Search history...">
+        <button id="btn-clear-history" class="panel-btn" title="Clear all history">Clear All</button>
+      </div>
+      <div id="history-list" class="panel-list">
+        <!-- History items will be dynamically added here -->
+      </div>
+    </div>
+
+    <!-- Chrome Import Panel -->
+    <div id="chrome-import-panel" class="panel hidden">
+      <div class="panel-header">
+        <h2>Import from Chrome</h2>
+        <button id="btn-close-chrome-import" class="panel-close-btn" title="Close">
+          <svg width="14" height="14" viewBox="0 0 14 14">
+            <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+        </button>
+      </div>
+      <div id="chrome-import-content" class="panel-content">
+        <!-- Content will be dynamically populated -->
+      </div>
+    </div>
+
+    <!-- AI Assistant Settings Panel -->
+    <div id="ai-settings-panel" class="panel hidden">
+      <div class="panel-header">
+        <h2>AI Assistant</h2>
+        <button id="btn-close-ai-settings" class="panel-close-btn" title="Close">
+          <svg width="14" height="14" viewBox="0 0 14 14">
+            <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+        </button>
+      </div>
+      <div id="ai-settings-content" class="panel-content">
+        <!-- AI provider settings will be dynamically populated -->
+      </div>
+    </div>
+
+    <!-- AI Webview Panel (right side) -->
+    <div id="ai-webview-panel" class="ai-webview-panel hidden">
+      <div id="ai-panel-resize" class="ai-panel-resize"></div>
+      <div class="ai-webview-header">
+        <div class="ai-webview-title">
+          <span id="ai-webview-icon" class="ai-webview-icon"></span>
+          <span id="ai-webview-name">AI Assistant</span>
+        </div>
+        <button id="btn-ai-webview-close" class="ai-webview-close-btn" title="Close">
+          <svg width="14" height="14" viewBox="0 0 14 14">
+            <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+        </button>
+      </div>
+      <div id="ai-webview-container" class="ai-webview-container">
+        <!-- Webview will be dynamically inserted here -->
+      </div>
+    </div>
+
+    <!-- Favorites Panel (right side) -->
+    <div id="favorites-panel" class="favorites-panel hidden">
+      <div id="favorites-slots" class="favorites-slots">
+        <!-- 5 favorite slots will be dynamically added here -->
+      </div>
+    </div>
+
+    <!-- Favorites Edit Dialog -->
+    <div id="favorites-edit-dialog" class="dialog-overlay hidden">
+      <div class="dialog">
+        <div class="dialog-header">
+          <h3 id="favorites-dialog-title">Add Favorite</h3>
+          <button id="btn-close-favorites-dialog" class="dialog-close-btn">
+            <svg width="14" height="14" viewBox="0 0 14 14">
+              <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+          </button>
+        </div>
+        <div class="dialog-content">
+          <label for="favorite-url-input">Website URL</label>
+          <input type="text" id="favorite-url-input" placeholder="https://example.com">
+        </div>
+        <div class="dialog-actions">
+          <button id="btn-cancel-favorite" class="dialog-btn secondary">Cancel</button>
+          <button id="btn-save-favorite" class="dialog-btn primary">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OAuth Modal -->
+  <div id="oauth-modal-overlay" class="modal-overlay hidden">
+    <div id="oauth-modal" class="oauth-modal">
+      <div class="oauth-modal-header">
+        <span id="oauth-modal-title">Sign In</span>
+        <button id="oauth-modal-close" class="oauth-close-btn">
+          <svg width="16" height="16" viewBox="0 0 16 16">
+            <path d="M2 2l12 12M14 2L2 14" stroke="currentColor" stroke-width="2"/>
+          </svg>
+        </button>
+      </div>
+      <div id="oauth-webview-container"></div>
+    </div>
+  </div>
+
+  <script type="module" src="renderer.js"></script>
+</body>
+</html>

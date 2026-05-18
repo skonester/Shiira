@@ -1,0 +1,49 @@
+
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+out/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Auto-updater files (only use dist/latest.yml)
+latest-check.yml
+latest-verify.yml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+
+# Temporary files
+tmp/
+temp/
+
+# Development/debugging files
+main-wrapper.js
+# Extensions reference
+extension-reference/
+
+# Experimental ad-learning modules (not for production)
+src/main/ad-blocker/ad-traffic-analyzer.js
+src/main/ad-blocker/ad-learning-storage.js
+src/main/ad-blocker/ad-learning-service.js
+src/renderer/modules/ad-learning-debug.js
+AD-LEARNING-GUIDE.md
+QUICK-REFERENCE.txt
+IMPLEMENTATION-SUMMARY.md
+SECURITY-IMPROVEMENTS-SUMMARY.md
+VMP-SIGNING-AND-RELEASE-GUIDE.md

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; img-src 'self' data:;">
+    <title>Shiira Browser Setup</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Custom Title Bar -->
+    <div class="title-bar">
+        <div class="title-bar-drag">
+            <img src="../assets/shiira.png" alt="Shiira" class="title-logo" onerror="this.style.display='none'">
+            <span class="title-text">Shiira Setup</span>
+        </div>
+        <div class="title-bar-buttons">
+            <button class="title-btn minimize" id="btn-minimize">
+                <svg viewBox="0 0 12 12"><path d="M2 6h8" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+            </button>
+            <button class="title-btn close" id="btn-close">
+                <svg viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="installer-container">
+        <!-- Sidebar with branding -->
+        <div class="sidebar">
+            <div class="sidebar-content">
+                <div class="logo-container">
+                    <img src="../assets/shiira.png" alt="Shiira" class="shiira-brand-logo" onerror="this.style.display='none'">
+                </div>
+                <h1 class="brand-title">SHIIRA</h1>
+                <p class="brand-subtitle">Browser</p>
+                <div class="ember-particles" id="ember-particles"></div>
+            </div>
+            <div class="sidebar-footer">
+                <span class="version" id="version-text">v0.2.4-alpha</span>
+            </div>
+        </div>
+
+        <!-- Wizard Content -->
+        <div class="wizard-content">
+            <!-- Page 1: Welcome -->
+            <div class="wizard-page active" id="page-welcome">
+                <h2 class="page-title">Welcome to Shiira Browser</h2>
+                <p class="page-description">
+                    Setup will install Shiira Browser on your computer.
+                </p>
+                
+                <div class="features-list">
+                    <div class="feature">
+                        <span class="feature-icon">🛡️</span>
+                        <div class="feature-text">
+                            <strong>Built-in Ad Blocking</strong>
+                            <span>Block ads across the web</span>
+                        </div>
+                    </div>
+                    <div class="feature">
+                        <span class="feature-icon">🔐</span>
+                        <div class="feature-text">
+                            <strong>Secure Password Manager</strong>
+                            <span>AES-256-GCM encrypted password storage</span>
+                        </div>
+                    </div>
+                    <div class="feature">
+                        <span class="feature-icon">🤖</span>
+                        <div class="feature-text">
+                            <strong>AI Assistant</strong>
+                            <span>Built-in AI assistant for smarter browsing</span>
+                        </div>
+                    </div>
+                    <div class="feature">
+                        <span class="feature-icon">🎨</span>
+                        <div class="feature-text">
+                            <strong>Themes</strong>
+                            <span>Multiple themes to choose from</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="page-actions">
+                    <button class="btn btn-secondary" id="btn-cancel-welcome">Cancel</button>
+                    <button class="btn btn-primary" id="btn-next-welcome">Next</button>
+                </div>
+            </div>
+
+            <!-- Page 2: Installation Location -->
+            <div class="wizard-page" id="page-location">
+                <h2 class="page-title">Choose Install Location</h2>
+                <p class="page-description">
+                    Select the folder where Shiira Browser will be installed.
+                </p>
+                
+                <div class="path-selector">
+                    <input type="text" class="path-input" id="install-path" readonly>
+                    <button class="btn btn-browse" id="btn-browse">Browse...</button>
+                </div>
+                
+                <div class="space-info" id="space-info">
+                    <span class="space-required">Space required: ~400 MB</span>
+                </div>
+                
+                <div class="path-error hidden" id="path-error">
+                    <span class="error-icon">⚠️</span>
+                    <span class="error-text">Cannot write to this location</span>
+                </div>
+                
+                <div class="page-actions">
+                    <button class="btn btn-secondary" id="btn-back-location">Back</button>
+                    <button class="btn btn-primary" id="btn-install">Install</button>
+                </div>
+            </div>
+
+            <!-- Page 3: Installing -->
+            <div class="wizard-page" id="page-installing">
+                <h2 class="page-title">Installing Shiira Browser</h2>
+                <p class="page-description" id="install-status">
+                    Please wait while Shiira Browser is being installed...
+                </p>
+                
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <span class="progress-text" id="progress-text">0%</span>
+                </div>
+                
+                <div class="install-details" id="install-details">
+                    Preparing installation...
+                </div>
+                
+                <div class="page-actions hidden" id="install-error-actions">
+                    <button class="btn btn-secondary" id="btn-retry">← Try Again</button>
+                    <button class="btn btn-primary" id="btn-close-error">Close</button>
+                </div>
+            </div>
+
+            <!-- Page 4: Complete -->
+            <div class="wizard-page" id="page-complete">
+                <h2 class="page-title">Installation Complete!</h2>
+                <p class="page-description">
+                    Shiira Browser has been successfully installed on your computer.
+                </p>
+                
+                <div class="complete-icon">
+                    <svg viewBox="0 0 64 64" class="checkmark">
+                        <circle cx="32" cy="32" r="30" fill="none" stroke="#FF7A18" stroke-width="3"/>
+                        <path d="M20 32 L28 40 L44 24" fill="none" stroke="#FF7A18" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                
+                <div class="launch-option">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="launch-checkbox" checked>
+                        <span class="checkmark-box"></span>
+                        <span class="checkbox-label">Launch Shiira Browser</span>
+                    </label>
+                </div>
+                
+                <div class="links">
+                    <a href="#" class="link" id="link-github">Visit us on GitHub</a>
+                </div>
+                
+                <div class="page-actions">
+                    <button class="btn btn-primary btn-finish" id="btn-finish">Finish</button>
+                </div>
+            </div>
+
+            <!-- Uninstall Page 1: Confirm -->
+            <div class="wizard-page" id="page-uninstall-confirm">
+                <h2 class="page-title">Uninstall Shiira Browser</h2>
+                <p class="page-description">
+                    Are you sure you want to uninstall Shiira Browser from your computer?
+                </p>
+                
+                <div class="uninstall-warning">
+                    <span class="warning-icon">⚠️</span>
+                    <div class="warning-text">
+                        <p>This will remove Shiira Browser and all its components.</p>
+                        <p class="warning-note">Your browsing data (bookmarks, passwords, history) will be preserved in your user profile.</p>
+                    </div>
+                </div>
+                
+                <div class="page-actions">
+                    <button class="btn btn-secondary" id="btn-cancel-uninstall">Cancel</button>
+                    <button class="btn btn-danger" id="btn-confirm-uninstall">Uninstall</button>
+                </div>
+            </div>
+
+            <!-- Uninstall Page 2: Progress -->
+            <div class="wizard-page" id="page-uninstall-progress">
+                <h2 class="page-title">Uninstalling Shiira Browser</h2>
+                <p class="page-description" id="uninstall-status">
+                    Please wait while Shiira Browser is being removed...
+                </p>
+                
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="uninstall-progress-fill"></div>
+                    </div>
+                    <span class="progress-text" id="uninstall-progress-text">0%</span>
+                </div>
+                
+                <div class="install-details" id="uninstall-details">
+                    Preparing to uninstall...
+                </div>
+            </div>
+
+            <!-- Uninstall Page 3: Complete -->
+            <div class="wizard-page" id="page-uninstall-complete">
+                <h2 class="page-title">Uninstall Complete</h2>
+                <p class="page-description">
+                    Shiira Browser has been successfully removed from your computer.
+                </p>
+                
+                <div class="complete-icon">
+                    <svg viewBox="0 0 64 64" class="checkmark">
+                        <circle cx="32" cy="32" r="30" fill="none" stroke="#FF7A18" stroke-width="3"/>
+                        <path d="M20 32 L28 40 L44 24" fill="none" stroke="#FF7A18" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                
+                <p class="page-description" style="margin-top: 20px;">
+                    Thank you for trying Shiira Browser. We hope to see you again!
+                </p>
+                
+                <div class="page-actions">
+                    <button class="btn btn-primary btn-finish" id="btn-uninstall-finish">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <span>(C) 2026 Shiira Project</span>
+    </div>
+
+    <script src="installer.js"></script>
+</body>
+</html>

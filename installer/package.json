@@ -1,0 +1,57 @@
+{
+  "name": "shiira-installer",
+  "version": "0.2.6-alpha",
+  "description": "Shiira Browser Custom Installer",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64"
+  },
+  "author": "Shiira Project",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/skonester/Shiira.git"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.skonester.shiira.installer",
+    "productName": "Shiira Setup",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "../assets/shiira-logo.ico"
+    },
+    "nsis": {
+      "artifactName": "Shiira-Setup-${version}.exe",
+      "differentialPackage": true
+    },
+    "portable": {
+      "artifactName": "Shiira-${version}.exe"
+    },
+    "extraResources": [
+      {
+        "from": "../dist/win-unpacked",
+        "to": "app-files",
+        "filter": ["**/*"]
+      }
+    ],
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "assets/**/*"
+    ]
+  }
+}

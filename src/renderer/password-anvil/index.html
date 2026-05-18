@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Password Anvil</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 600;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #ff6b35;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #ff8555;
+        }
+
+        .btn-secondary {
+            background: #2a2a2a;
+            color: #e0e0e0;
+        }
+
+        .btn-secondary:hover {
+            background: #3a3a3a;
+        }
+
+        .search-bar {
+            width: 100%;
+            padding: 12px 16px;
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .search-bar:focus {
+            outline: none;
+            border-color: #ff6b35;
+        }
+
+        .passwords-list {
+            background: #2a2a2a;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .password-item {
+            padding: 16px 20px;
+            border-bottom: 1px solid #3a3a3a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s;
+        }
+
+        .password-item:hover {
+            background: #333;
+        }
+
+        .password-item:last-child {
+            border-bottom: none;
+        }
+
+        .password-info {
+            flex: 1;
+        }
+
+        .password-url {
+            font-weight: 500;
+            font-size: 16px;
+            margin-bottom: 4px;
+            color: #ff6b35;
+        }
+
+        .password-username {
+            font-size: 14px;
+            color: #999;
+        }
+
+        .password-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .icon-btn {
+            padding: 8px 12px;
+            background: transparent;
+            border: 1px solid #3a3a3a;
+            border-radius: 4px;
+            color: #e0e0e0;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .icon-btn:hover {
+            background: #3a3a3a;
+        }
+
+        .icon-btn.delete {
+            color: #ff4444;
+            border-color: #ff4444;
+        }
+
+        .icon-btn.delete:hover {
+            background: #ff4444;
+            color: white;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 30px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            font-family: 'Cinzel', serif !important;
+            text-align: center !important;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 14px;
+            color: #999;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px 12px;
+            background: #1a1a1a;
+            border: 1px solid #3a3a3a;
+            border-radius: 4px;
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #ff6b35;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .empty-state-text {
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+
+        .empty-state-subtext {
+            font-size: 14px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        /* Text Context Menu */
+        .context-menu {
+            position: fixed;
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            border-radius: 6px;
+            padding: 4px 0;
+            min-width: 180px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            z-index: 10000;
+        }
+
+        .context-menu.hidden {
+            display: none;
+        }
+
+        .context-menu-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #e0e0e0;
+            transition: background 0.1s;
+        }
+
+        .context-menu-item:hover {
+            background: #3a3a3a;
+        }
+
+        .context-menu-item.disabled {
+            color: #666;
+            cursor: not-allowed;
+        }
+
+        .context-menu-item.disabled:hover {
+            background: transparent;
+        }
+
+        .context-menu-separator {
+            height: 1px;
+            background: #3a3a3a;
+            margin: 4px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔨 Password Anvil</h1>
+        <div class="actions">
+            <button class="btn btn-secondary" id="import-btn">Import CSV</button>
+            <button class="btn btn-primary" id="add-btn">Add Password</button>
+        </div>
+    </div>
+
+    <input type="text" class="search-bar" id="search" placeholder="Search passwords...">
+
+    <div class="passwords-list" id="passwords-list">
+        <div class="empty-state">
+            <div class="empty-state-icon">🔐</div>
+            <div class="empty-state-text">No passwords saved yet</div>
+            <div class="empty-state-subtext">Add your first password or import from Chrome</div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Password Modal -->
+    <div class="modal" id="password-modal">
+        <div class="modal-content">
+            <div class="modal-header modal-title" id="modal-title">Add Password</div>
+            <div class="form-group">
+                <label>Website URL</label>
+                <input type="text" id="url-input" placeholder="https://example.com">
+            </div>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="username-input" placeholder="username@example.com">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="password-input" placeholder="••••••••">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="cancel-btn">Cancel</button>
+                <button class="btn btn-primary" id="save-btn">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <input type="file" id="file-input" accept=".csv">
+
+    <!-- Text Input Context Menu -->
+    <div id="text-context-menu" class="context-menu hidden">
+      <div class="context-menu-item" data-action="undo">Undo</div>
+      <div class="context-menu-item" data-action="redo">Redo</div>
+      <div class="context-menu-separator"></div>
+      <div class="context-menu-item" data-action="cut">Cut</div>
+      <div class="context-menu-item" data-action="copy">Copy</div>
+      <div class="context-menu-item" data-action="paste">Paste</div>
+      <div class="context-menu-item" data-action="delete">Delete</div>
+      <div class="context-menu-separator"></div>
+      <div class="context-menu-item" data-action="select-all">Select All</div>
+    </div>
+
+    <script src="password-anvil.js"></script>
+</body>
+</html>
