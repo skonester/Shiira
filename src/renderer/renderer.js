@@ -52,7 +52,7 @@ class ShiiraBrowser {
     this.tabs = [];
     this.activeTabId = null;
     this.tabCounter = 0;
-    this.homepage = 'https://www.google.com';
+    this.homepage = 'https://www.startpage.com';
     
     // Closed tabs for reopen (Ctrl+Shift+T)
     this.closedTabs = [];
@@ -68,14 +68,8 @@ class ShiiraBrowser {
     
     // Site logos for tab titles
     this.siteLogos = {
-      'www.youtube.com': 'shiira-asset://site-logos/YouTube.svg',
-      'youtube.com': 'shiira-asset://site-logos/YouTube.svg',
-      'm.youtube.com': 'shiira-asset://site-logos/YouTube.svg',
-      'www.google.com': 'shiira-asset://site-logos/Google.svg',
-      'google.com': 'shiira-asset://site-logos/Google.svg',
-      'www.twitch.tv': 'shiira-asset://site-logos/Twitch.svg',
-      'twitch.tv': 'shiira-asset://site-logos/Twitch.svg',
-      'm.twitch.tv': 'shiira-asset://site-logos/Twitch.svg'
+      'www.startpage.com': 'shiira-asset://site-logos/Startpage.com_logo.svg',
+      'startpage.com': 'shiira-asset://site-logos/Startpage.com_logo.svg'
     };
     
     // Drag state
@@ -138,7 +132,11 @@ class ShiiraBrowser {
     // Listen for open-url-in-new-tab message (when webview tries to open a new window)
     window.shiiraAPI.onOpenUrlInNewTab((url) => {
       console.log('[Shiira] Opening URL in new tab:', url);
-      this.createTab(url);
+      if (this.openLinkInTabOnce) {
+        this.openLinkInTabOnce(url);
+      } else {
+        this.createTab(url);
+      }
     });
     
     // Listen for OAuth modal requests
@@ -179,9 +177,8 @@ class ShiiraBrowser {
     // Create webview for OAuth flow
     const webview = document.createElement('webview');
     webview.id = 'oauth-webview';
-    webview.setAttribute('allowpopups', '');
     webview.setAttribute('partition', 'persist:main');
-    webview.setAttribute('webpreferences', 'contextIsolation=yes,plugins=yes');
+    webview.setAttribute('webpreferences', 'contextIsolation=yes,plugins=yes,backgroundThrottling=no,v8CacheOptions=bypassHeatCheckAndEagerCompile');
     webview.src = url;
     
     container.appendChild(webview);

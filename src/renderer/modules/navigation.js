@@ -25,9 +25,8 @@ export const NavigationMixin = {
   createWebviewForHomeTab(tab, url) {
     const webview = document.createElement('webview');
     webview.id = tab.id;
-    webview.setAttribute('allowpopups', '');
     webview.setAttribute('partition', 'persist:main');
-    webview.setAttribute('webpreferences', 'contextIsolation=yes');
+    webview.setAttribute('webpreferences', 'contextIsolation=yes,backgroundThrottling=no,v8CacheOptions=bypassHeatCheckAndEagerCompile');
     
     this.setupWebviewEvents(webview, tab.id);
     
@@ -62,7 +61,7 @@ export const NavigationMixin = {
   processUrl(input) {
     input = input.trim();
     
-    if (input.match(/^https?:\/\//i)) {
+    if (input.match(/^(https?|shiira):\/\//i)) {
       return input;
     }
     
@@ -70,7 +69,7 @@ export const NavigationMixin = {
       return 'https://' + input;
     }
     
-    return this.buildSearchUrl ? this.buildSearchUrl(input) : `https://www.google.com/search?q=${encodeURIComponent(input)}`;
+    return this.buildSearchUrl ? this.buildSearchUrl(input) : `https://www.startpage.com/sp/search?query=${encodeURIComponent(input)}`;
   },
 
   goBack() {
@@ -237,31 +236,44 @@ export const NavigationMixin = {
   showWebviewContextMenu(e, webview) {
     this.contextMenuWebview = webview;
     this.contextMenuParams = e.params;
-    
+
+    const hasSelection = Boolean(e.params.selectionText && e.params.selectionText.length > 0);
+    const hasLink = Boolean(e.params.linkURL && e.params.linkURL.length > 0);
+    const hasImage = Boolean((e.params.hasImageContents || e.params.mediaType === 'image') && e.params.srcURL);
+    const isEditable = Boolean(e.params.isEditable);
+
     this.webviewContextMenu.style.left = e.params.x + 'px';
     this.webviewContextMenu.style.top = e.params.y + 'px';
     this.webviewContextMenu.classList.remove('hidden');
     this.contextMenuOverlay.classList.remove('hidden');
-    
-    const hasSelection = e.params.selectionText && e.params.selectionText.length > 0;
-    const hasLink = e.params.linkURL && e.params.linkURL.length > 0;
-    const hasImage = e.params.hasImageContents;
-    
+
     this.webviewContextMenu.querySelectorAll('.context-menu-item').forEach(item => {
       const action = item.dataset.action;
       if (action === 'copy' || action === 'search') {
         item.style.display = hasSelection ? 'flex' : 'none';
-      } else if (action === 'open-link' || action === 'open-link-new-tab' || action === 'copy-link') {
+      } else if (action === 'cut' || action === 'paste' || action === 'undo' || action === 'redo') {
+        item.style.display = isEditable ? 'flex' : 'none';
+      } else if (action === 'open-link' || action === 'open-link-new-tab' || action === 'copy-link' || action === 'save-link') {
         item.style.display = hasLink ? 'flex' : 'none';
-      } else if (action === 'save-image' || action === 'copy-image') {
+      } else if (action === 'save-image' || action === 'copy-image' || action === 'copy-image-address' || action === 'open-image-new-tab') {
         item.style.display = hasImage ? 'flex' : 'none';
       }
-      
-      item.onclick = () => {
-        this.handleWebviewContextMenuAction(action);
+
+      item.onclick = async () => {
+        await this.handleWebviewContextMenuAction(action);
         this.hideWebviewContextMenu();
       };
     });
+
+    this.webviewContextMenu.querySelectorAll('.context-menu-separator').forEach(separator => {
+      separator.style.display = 'block';
+    });
+
+    const linkSeparator = this.webviewContextMenu.querySelector('#ctx-link-separator');
+    if (linkSeparator) linkSeparator.style.display = hasLink ? 'block' : 'none';
+
+    const imageSeparator = this.webviewContextMenu.querySelector('#ctx-image-separator');
+    if (imageSeparator) imageSeparator.style.display = hasImage ? 'block' : 'none';
   },
 
   hideWebviewContextMenu() {
@@ -271,7 +283,31 @@ export const NavigationMixin = {
     this.contextMenuParams = null;
   },
 
-  handleWebviewContextMenuAction(action) {
+  async getContextImageSource(webview, srcURL) {
+    if (!srcURL || !srcURL.startsWith('blob:')) {
+      return srcURL;
+    }
+
+    try {
+      return await webview.executeJavaScript(`
+        (async () => {
+          const response = await fetch(${JSON.stringify(srcURL)});
+          const blob = await response.blob();
+          return await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(new Error('Unable to read image blob'));
+            reader.readAsDataURL(blob);
+          });
+        })();
+      `, true);
+    } catch (error) {
+      console.error('[ContextMenu] Failed to resolve blob image:', error);
+      return srcURL;
+    }
+  },
+
+  async handleWebviewContextMenuAction(action) {
     const webview = this.contextMenuWebview;
     const params = this.contextMenuParams;
     if (!webview || !params) return;
@@ -286,12 +322,27 @@ export const NavigationMixin = {
       case 'reload':
         webview.reload();
         break;
+      case 'undo':
+        webview.undo?.();
+        break;
+      case 'redo':
+        webview.redo?.();
+        break;
+      case 'cut':
+        webview.cut?.();
+        break;
       case 'copy':
         webview.copy();
         break;
+      case 'paste':
+        webview.paste?.();
+        break;
+      case 'select-all':
+        webview.selectAll?.();
+        break;
       case 'search':
         if (params.selectionText) {
-          this.createTab(this.buildSearchUrl ? this.buildSearchUrl(params.selectionText) : `https://www.google.com/search?q=${encodeURIComponent(params.selectionText)}`);
+          this.createTab(this.buildSearchUrl ? this.buildSearchUrl(params.selectionText) : `https://www.startpage.com/sp/search?query=${encodeURIComponent(params.selectionText)}`);
         }
         break;
       case 'open-link':
@@ -309,15 +360,44 @@ export const NavigationMixin = {
           navigator.clipboard.writeText(params.linkURL);
         }
         break;
+      case 'save-link':
+        if (params.linkURL) {
+          await window.shiiraAPI.downloadFile(params.linkURL, { title: 'Save Link As' });
+        }
+        break;
+      case 'open-image-new-tab':
+        if (params.srcURL) {
+          this.createTab(params.srcURL);
+        }
+        break;
       case 'save-image':
         if (params.srcURL) {
-          window.shiiraAPI.downloadFile(params.srcURL);
+          const imageSource = await this.getContextImageSource(webview, params.srcURL);
+          await window.shiiraAPI.downloadFile(imageSource, { title: 'Save Image As' });
         }
         break;
       case 'copy-image':
         if (params.srcURL) {
+          const imageSource = await this.getContextImageSource(webview, params.srcURL);
+          await window.shiiraAPI.copyImage(imageSource);
+        }
+        break;
+      case 'copy-image-address':
+        if (params.srcURL) {
           navigator.clipboard.writeText(params.srcURL);
         }
+        break;
+      case 'save-page':
+        try {
+          const url = webview.getURL?.();
+          if (url) await window.shiiraAPI.downloadFile(url, { title: 'Save Page As' });
+        } catch (e) {}
+        break;
+      case 'view-source':
+        try {
+          const url = webview.getURL?.();
+          if (url && !url.startsWith('view-source:')) this.createTab(`view-source:${url}`);
+        } catch (e) {}
         break;
       case 'inspect':
         webview.inspectElement(params.x, params.y);

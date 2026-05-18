@@ -149,9 +149,8 @@ export const TabManagerMixin = {
     // Create webview
     const webview = document.createElement('webview');
     webview.id = tabId;
-    webview.setAttribute('allowpopups', '');
     webview.setAttribute('partition', privateMode ? `private:${tabId}` : 'persist:main');
-    webview.setAttribute('webpreferences', 'contextIsolation=yes,plugins=yes');
+    webview.setAttribute('webpreferences', 'contextIsolation=yes,plugins=yes,backgroundThrottling=no,v8CacheOptions=bypassHeatCheckAndEagerCompile');
     
     this.setupWebviewEvents(webview, tabId);
     

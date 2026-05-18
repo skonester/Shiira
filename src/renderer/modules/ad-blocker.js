@@ -48,7 +48,7 @@ export const AdBlockerMixin = {
     try {
       const stats = await window.shiiraAPI.adBlocker.getStats();
       if (this.adblockStats) {
-        this.adblockStats.textContent = `${formatCount(stats.totalBlocked)} ads blocked`;
+        this.adblockStats.textContent = `${formatCount(stats.blocked || 0)} ads blocked`;
       }
     } catch (e) {
       console.error('Failed to get ad block stats:', e);

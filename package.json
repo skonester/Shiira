@@ -116,7 +116,10 @@
     "electron-updater": "^6.7.3",
     "electron-widevinecdm": "^8.0.0",
     "keytar": "^7.9.0",
+    "lru-cache": "^11.4.0",
+    "mime-types": "^3.0.2",
     "systeminformation": "^5.31.6",
-    "three": "^0.182.0"
+    "three": "^0.182.0",
+    "v8-compile-cache-lib": "^3.0.1"
   }
 }

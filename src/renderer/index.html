@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' shiira-asset:; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src * data: blob: 'self' shiira-asset:; frame-src *; child-src *; connect-src 'self' https://suggestqueries.google.com;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' shiira-asset:; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src * data: blob: 'self' shiira-asset:; frame-src *; child-src *; connect-src 'self' https://www.startpage.com;">
   <title>Shiira</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -162,14 +162,11 @@
             <div class="welcome-title-large">Shiira</div>
           </div>
           <div class="search-box">
-            <input type="text" id="home-search" placeholder="Search the web...">
-            <img class="search-box-logo" src="shiira-asset://site-logos/Google.svg" alt="Google">
+            <input type="text" id="home-search" placeholder="Search Startpage...">
+            <img class="search-box-logo" src="shiira-asset://site-logos/Startpage.com_logo.svg" alt="Startpage">
           </div>
           <div class="search-engine-chips">
-            <button class="search-engine-chip active" data-engine="google">Google</button>
-            <button class="search-engine-chip" data-engine="duckduckgo">DuckDuckGo</button>
-            <button class="search-engine-chip" data-engine="brave">Brave</button>
-            <button class="search-engine-chip" data-engine="wikipedia">Wikipedia</button>
+            <button class="search-engine-chip active" data-engine="startpage">Startpage</button>
           </div>
         </div>
       </div>
@@ -210,13 +207,44 @@
         Reload
       </div>
       <div class="context-menu-separator"></div>
+      <div class="context-menu-item" data-action="open-link">
+        Open Link
+      </div>
       <div class="context-menu-item" data-action="copy-link" id="ctx-copy-link">
         Copy Link Address
+      </div>
+      <div class="context-menu-item" data-action="save-link">
+        Save Link As...
       </div>
       <div class="context-menu-item" data-action="open-link-new-tab" id="ctx-open-link">
         Open Link in New Tab
       </div>
       <div class="context-menu-separator" id="ctx-link-separator"></div>
+      <div class="context-menu-item" data-action="open-image-new-tab">
+        Open Image in New Tab
+      </div>
+      <div class="context-menu-item" data-action="save-image">
+        Save Image As...
+      </div>
+      <div class="context-menu-item" data-action="copy-image">
+        Copy Image
+      </div>
+      <div class="context-menu-item" data-action="copy-image-address">
+        Copy Image Address
+      </div>
+      <div class="context-menu-separator" id="ctx-image-separator"></div>
+      <div class="context-menu-item" data-action="search">
+        Search Selection
+      </div>
+      <div class="context-menu-item" data-action="undo">
+        Undo
+      </div>
+      <div class="context-menu-item" data-action="redo">
+        Redo
+      </div>
+      <div class="context-menu-item" data-action="cut">
+        Cut
+      </div>
       <div class="context-menu-item" data-action="copy">
         Copy
       </div>
@@ -227,6 +255,9 @@
         Select All
       </div>
       <div class="context-menu-separator"></div>
+      <div class="context-menu-item" data-action="save-page">
+        Save Page As...
+      </div>
       <div class="context-menu-item" data-action="view-source">
         View Page Source
       </div>

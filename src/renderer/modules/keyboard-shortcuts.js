@@ -88,7 +88,6 @@ export const KeyboardShortcutsMixin = {
         this.reopenClosedTab();
         return;
       }
-      
       // Ctrl+Tab: Next tab
       if (e.ctrlKey && !e.shiftKey && e.key === 'Tab') {
         e.preventDefault();
@@ -165,6 +164,90 @@ export const KeyboardShortcutsMixin = {
         this.showTabExpose();
         return;
       }
+
+      // Ctrl + Plus / Ctrl + =: Zoom In
+      if (e.ctrlKey && (e.key === '=' || e.key === '+')) {
+        e.preventDefault();
+        this.zoomIn();
+        return;
+      }
+
+      // Ctrl + Minus: Zoom Out
+      if (e.ctrlKey && e.key === '-') {
+        e.preventDefault();
+        this.zoomOut();
+        return;
+      }
+
+      // Ctrl + 0: Zoom Reset
+      if (e.ctrlKey && e.key === '0') {
+        e.preventDefault();
+        this.zoomReset();
+        return;
+      }
     });
+  },
+
+  zoomIn() {
+    if (!this.activeTabId) return;
+    const tab = this.tabs.find(t => t.id === this.activeTabId);
+    if (!tab || !tab.webview) return;
+    
+    let currentFactor = tab.zoomFactor || 1.0;
+    let newFactor = Math.min(3.0, currentFactor + 0.1); // Max 300%
+    tab.zoomFactor = newFactor;
+    
+    try {
+      tab.webview.setZoomFactor(newFactor);
+      this.updateStatus(`Zoom: ${Math.round(newFactor * 100)}%`);
+      setTimeout(() => {
+        if (this.statusText && this.statusText.textContent.startsWith('Zoom:')) {
+          this.updateStatus('Ready');
+        }
+      }, 1500);
+    } catch (e) {
+      console.error('Failed to set zoom factor:', e);
+    }
+  },
+
+  zoomOut() {
+    if (!this.activeTabId) return;
+    const tab = this.tabs.find(t => t.id === this.activeTabId);
+    if (!tab || !tab.webview) return;
+    
+    let currentFactor = tab.zoomFactor || 1.0;
+    let newFactor = Math.max(0.5, currentFactor - 0.1); // Min 50%
+    tab.zoomFactor = newFactor;
+    
+    try {
+      tab.webview.setZoomFactor(newFactor);
+      this.updateStatus(`Zoom: ${Math.round(newFactor * 100)}%`);
+      setTimeout(() => {
+        if (this.statusText && this.statusText.textContent.startsWith('Zoom:')) {
+          this.updateStatus('Ready');
+        }
+      }, 1500);
+    } catch (e) {
+      console.error('Failed to set zoom factor:', e);
+    }
+  },
+
+  zoomReset() {
+    if (!this.activeTabId) return;
+    const tab = this.tabs.find(t => t.id === this.activeTabId);
+    if (!tab || !tab.webview) return;
+    
+    tab.zoomFactor = 1.0;
+    try {
+      tab.webview.setZoomFactor(1.0);
+      this.updateStatus('Zoom: 100%');
+      setTimeout(() => {
+        if (this.statusText && this.statusText.textContent.startsWith('Zoom:')) {
+          this.updateStatus('Ready');
+        }
+      }, 1500);
+    } catch (e) {
+      console.error('Failed to set zoom factor:', e);
+    }
   }
 };

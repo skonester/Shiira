@@ -1,4 +1,11 @@
-const { app, BrowserWindow, ipcMain, session, protocol, nativeImage, Menu } = require('electron');
+try {
+  require('v8-compile-cache-lib');
+} catch (error) {
+  // Optional startup cache; the app runs normally if dependencies are not installed yet.
+}
+
+const { app, BrowserWindow, ipcMain, session, protocol, nativeImage, Menu, dialog, clipboard, shell, net } = require('electron');
+const { LRUCache } = require('lru-cache');
 
 // Try to import components for Castlabs Electron (Widevine DRM support)
 let components = null;
@@ -12,6 +19,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const si = require('systeminformation');
+const mime = require('mime-types');
 
 // Disable default Electron menu to prevent Ctrl+R from reloading the whole window
 // Our renderer handles all keyboard shortcuts
@@ -52,6 +60,9 @@ const scriptInjector = getScriptInjector();
 // AI Service will be initialized after app is ready
 let aiService = null;
 let darkReaderScriptCache = null;
+const suggestionCache = new LRUCache({ max: 256, ttl: 1000 * 60 * 10 });
+const pendingDownloads = new WeakMap();
+const browserHeaderSessions = new WeakSet();
 let hardwareAccelerationProfile = {
   avx2: false,
   vulkanLikely: false,
@@ -87,21 +98,89 @@ function getDarkReaderScript() {
   return darkReaderScriptCache;
 }
 
+function preconnectBrowserSession(sessionInstance) {
+  if (typeof sessionInstance.preconnect !== 'function') return;
+
+  [
+    'https://www.startpage.com',
+    'https://www.reddit.com',
+    'https://styles.redditmedia.com',
+    'https://preview.redd.it',
+    'https://i.redd.it',
+    'https://v.redd.it'
+  ].forEach((url) => {
+    try {
+      sessionInstance.preconnect({ url, numSockets: 4 });
+    } catch (error) {
+      if (!app.isPackaged) {
+        console.warn('[Network] Preconnect failed:', url, error.message);
+      }
+    }
+  });
+}
+
+function installBrowserHeaderOverrides(sessionInstance) {
+  if (!SHIIRA_CONFIG.userAgent || !sessionInstance?.webRequest) return;
+  if (browserHeaderSessions.has(sessionInstance)) return;
+  browserHeaderSessions.add(sessionInstance);
+
+  const chromeMajor = String(process.versions.chrome || '').split('.')[0] || '120';
+  const browserHeaders = {
+    'User-Agent': SHIIRA_CONFIG.userAgent,
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Sec-CH-UA': `"Google Chrome";v="${chromeMajor}", "Chromium";v="${chromeMajor}", "Not.A/Brand";v="99"`,
+    'Sec-CH-UA-Mobile': '?0',
+    'Sec-CH-UA-Platform': '"Windows"'
+  };
+
+  sessionInstance.webRequest.onBeforeSendHeaders(
+    { urls: ['http://*/*', 'https://*/*'] },
+    (details, callback) => {
+      callback({
+        requestHeaders: {
+          ...details.requestHeaders,
+          ...browserHeaders
+        }
+      });
+    }
+  );
+}
+
 function configureHardwareAcceleration() {
+  const enabledFeatures = [
+    'Vulkan',
+    'VulkanFromANGLE',
+    'DefaultANGLEVulkan',
+    'CanvasOopRasterization',
+    'UseSkiaRenderer',
+    'BackForwardCache',
+    'ParallelDownloading',
+    'LazyFrameLoading',
+    'LazyImageLoading',
+    'Prerender2',
+    'SpeculationRulesPrerenderProxy',
+    'ServiceWorkerBypassFetchHandler',
+    'SharedArrayBuffer',
+    'CalculateNativeWinOcclusion'
+  ];
+
   app.commandLine.appendSwitch('ignore-gpu-blocklist');
   app.commandLine.appendSwitch('enable-gpu-rasterization');
   app.commandLine.appendSwitch('enable-zero-copy');
   app.commandLine.appendSwitch('enable-native-gpu-memory-buffers');
   app.commandLine.appendSwitch('enable-accelerated-video-decode');
-  app.commandLine.appendSwitch('enable-features', [
-    'Vulkan',
-    'VulkanFromANGLE',
-    'DefaultANGLEVulkan',
-    'CanvasOopRasterization',
-    'UseSkiaRenderer'
-  ].join(','));
+  app.commandLine.appendSwitch('enable-features', enabledFeatures.join(','));
   app.commandLine.appendSwitch('use-angle', 'vulkan');
   app.commandLine.appendSwitch('enable-unsafe-webgpu');
+  app.commandLine.appendSwitch('enable-quic');
+  app.commandLine.appendSwitch('enable-parallel-downloading');
+  app.commandLine.appendSwitch('disable-renderer-backgrounding');
+  app.commandLine.appendSwitch('disable-background-timer-throttling');
+  app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+  app.commandLine.appendSwitch('max-active-webgl-contexts', '32');
+  app.commandLine.appendSwitch('disk-cache-size', '536870912');
+  app.commandLine.appendSwitch('media-cache-size', '268435456');
+  app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096');
 }
 
 async function detectHardwareAccelerationProfile() {
@@ -298,107 +377,116 @@ function handleKeyboardShortcut(event, input, targetWindow) {
   }
 }
 
+function isOAuthPopupUrl(url, features = '', disposition = '') {
+  return features.includes('popup') ||
+    url.includes('oauth') ||
+    url.includes('accounts.google.com') ||
+    url.includes('login.microsoftonline.com') ||
+    url.includes('facebook.com/login') ||
+    url.includes('github.com/login') ||
+    (url.includes('auth') && (features.includes('width=') || features.includes('height=')));
+}
+
+function routeWindowOpen(contents, details = {}) {
+  const { url, frameName, features = '', disposition = '' } = details;
+  console.log('[WebContents] Window open requested:', { url, frameName, features, disposition });
+
+  if (!url) {
+    return { action: 'deny' };
+  }
+
+  const parentWindow = BrowserWindow.fromWebContents(contents.hostWebContents || contents);
+  if (!parentWindow || parentWindow.isDestroyed()) {
+    return { action: 'deny' };
+  }
+
+  if (isOAuthPopupUrl(url, features, disposition)) {
+    console.log('[WebContents] OAuth/SSO popup routed to in-app modal');
+    parentWindow.webContents.send('show-oauth-modal', url);
+    return { action: 'deny' };
+  }
+
+  console.log('[WebContents] Link routed to Shiira tab');
+  parentWindow.webContents.send('open-url-in-new-tab', url);
+  return { action: 'deny' };
+}
+
+function installDownloadPrompt(sessionInstance) {
+  if (pendingDownloads.has(sessionInstance)) return;
+
+  const pendingUrls = new Map();
+  pendingDownloads.set(sessionInstance, pendingUrls);
+
+  sessionInstance.on('will-download', async (event, item) => {
+    const url = item.getURL();
+    const metadata = pendingUrls.get(url) || {};
+    pendingUrls.delete(url);
+
+    if (metadata.prompt !== false) {
+      item.pause();
+
+      const ownerWindow = metadata.windowId
+        ? BrowserWindow.fromId(metadata.windowId)
+        : BrowserWindow.getFocusedWindow();
+
+      const result = await dialog.showSaveDialog(ownerWindow || undefined, {
+        title: metadata.title || 'Save File',
+        defaultPath: item.getFilename()
+      });
+
+      if (result.canceled || !result.filePath) {
+        item.cancel();
+        return;
+      }
+
+      item.setSavePath(result.filePath);
+      item.resume();
+    }
+  });
+}
+
+function queueDownload(sessionInstance, url, metadata = {}) {
+  installDownloadPrompt(sessionInstance);
+  const pendingUrls = pendingDownloads.get(sessionInstance);
+  pendingUrls.set(url, metadata);
+  sessionInstance.downloadURL(url);
+}
+
 // Listen for all new webContents (including webviews) and add keyboard shortcut handling
 app.on('web-contents-created', (event, contents) => {
+  if (typeof contents.setWindowOpenHandler === 'function') {
+    contents.setWindowOpenHandler((details) => routeWindowOpen(contents, details));
+  }
+
+  contents.on('will-create-window', (event, details) => {
+    event.preventDefault();
+    routeWindowOpen(contents, details);
+  });
+
   // Handle popup windows created by setWindowOpenHandler
   if (contents.getType() === 'window') {
-    console.log('[Popup] New popup window created');
-    
-    // Inject password autofill when popup loads
-    contents.on('did-finish-load', async () => {
-      const url = contents.getURL();
-      console.log('[Popup] did-finish-load:', url);
-      
-      // Inject password autofill script (same as webviews)
-      try {
-        const scriptPath = path.join(__dirname, '../renderer/password-anvil/password-autofill.js');
-        const script = fs.readFileSync(scriptPath, 'utf8');
-        
-        // Wrap script execution to catch errors
-        const result = await contents.executeJavaScript(`
-          (function() {
-            try {
-              ${script}
-              return { success: true, message: 'Script executed' };
-            } catch (error) {
-              return { success: false, error: error.message, stack: error.stack };
-            }
-          })();
-        `);
-        
-        console.log('[Popup] Password autofill injection result:', result);
-        
-        // Check if APIs are available in popup
-        const apiCheck = await contents.executeJavaScript(`({
-          shiiraAPI: typeof window.shiiraAPI !== 'undefined',
-          electronAPI: typeof window.electronAPI !== 'undefined',
-          passwords: typeof window.electronAPI?.passwords !== 'undefined'
-        })`);
-        console.log('[Popup] API availability:', apiCheck);
-        
-        // Check if script is detecting password fields
-        setTimeout(async () => {
-          try {
-            const fieldCheck = await contents.executeJavaScript(`
-              document.querySelectorAll('input[type="password"], input[type="email"], input[type="text"][autocomplete*="username"]').length
-            `);
-            console.log('[Popup] Password/login fields detected:', fieldCheck);
-          } catch (e) {
-            console.error('[Popup] Error checking fields:', e);
-          }
-        }, 2000); // Wait 2 seconds for page to load
-        
-      } catch (error) {
-        console.error('[Popup] Error injecting password autofill:', error);
-      }
-    });
+    const popupWindow = BrowserWindow.fromWebContents(contents);
+    popupWindow?.hide();
+    popupWindow?.destroy();
+    console.log('[Popup] Blocked native Electron popup window');
+    return;
   }
   
   // Only handle webview webContents
   if (contents.getType() === 'webview') {
+    const webviewSession = contents.session;
+    if (webviewSession && SHIIRA_CONFIG.userAgent) {
+      webviewSession.setUserAgent(SHIIRA_CONFIG.userAgent);
+      installBrowserHeaderOverrides(webviewSession);
+      installDownloadPrompt(webviewSession);
+      preconnectBrowserSession(webviewSession);
+    }
+
     contents.on('before-input-event', (event, input) => {
       // Find the parent BrowserWindow to send the shortcut to
       if (mainWindow && !mainWindow.isDestroyed()) {
         handleKeyboardShortcut(event, input, mainWindow);
       }
-    });
-    
-    // Handle window.open() and target="_blank" links
-    contents.setWindowOpenHandler(({ url, frameName, features, disposition }) => {
-      console.log('[WebContents] Window open requested:', { url, frameName, features, disposition });
-      
-      // Check if this looks like an OAuth/SSO popup (common patterns)
-      const isOAuthPopup = 
-        disposition === 'new-window' || 
-        disposition === 'foreground-tab' ||
-        features.includes('popup') ||
-        url.includes('oauth') ||
-        url.includes('accounts.google.com') ||
-        url.includes('login.microsoftonline.com') ||
-        url.includes('facebook.com/login') ||
-        url.includes('github.com/login') ||
-        url.includes('auth') && (features.includes('width=') || features.includes('height='));
-      
-      if (isOAuthPopup) {
-        console.log('[WebContents] OAuth/SSO popup detected, showing in modal overlay');
-        
-        // Instead of opening a new window, send message to renderer to show OAuth modal
-        const parentWindow = BrowserWindow.fromWebContents(contents.hostWebContents);
-        if (parentWindow && !parentWindow.isDestroyed()) {
-          parentWindow.webContents.send('show-oauth-modal', url);
-        }
-        
-        // Deny the automatic popup creation since we'll handle it in-app
-        return { action: 'deny' };
-      }
-      
-      // For regular links, open in new tab instead
-      console.log('[WebContents] Regular link, opening in new tab');
-      const parentWindow = BrowserWindow.fromWebContents(contents.hostWebContents);
-      if (parentWindow && !parentWindow.isDestroyed()) {
-        parentWindow.webContents.send('open-url-in-new-tab', url);
-      }
-      return { action: 'deny' };
     });
   }
 });
@@ -408,7 +496,7 @@ const SHIIRA_CONFIG = {
   name: 'Shiira',
   version: require('../../package.json').version,
   company: 'Shiira Project',
-  homepage: 'https://www.google.com',
+  homepage: 'https://www.startpage.com',
   userAgent: null // Will be set dynamically
 };
 
@@ -436,6 +524,8 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
+      backgroundThrottling: false,
+      v8CacheOptions: 'bypassHeatCheckAndEagerCompile',
       preload: path.join(__dirname, '../preload/preload.js'),
       webviewTag: true // Enable webview for browser tabs
     }
@@ -649,11 +739,17 @@ function createWindow() {
   
   // Apply to default session
   setupPermissionHandlers(session.defaultSession, 'default');
+  installBrowserHeaderOverrides(session.defaultSession);
+  installDownloadPrompt(session.defaultSession);
   
   // Apply to persist:main partition (used by webviews)
   const webviewSession = session.fromPartition('persist:main');
   webviewSession.setUserAgent(SHIIRA_CONFIG.userAgent);
   setupPermissionHandlers(webviewSession, 'persist:main');
+  installBrowserHeaderOverrides(webviewSession);
+  installDownloadPrompt(webviewSession);
+  preconnectBrowserSession(session.defaultSession);
+  preconnectBrowserSession(webviewSession);
 
   // Load the browser UI
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
@@ -843,6 +939,8 @@ ipcMain.handle('create-new-window', (event, url) => {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
+      backgroundThrottling: false,
+      v8CacheOptions: 'bypassHeatCheckAndEagerCompile',
       preload: path.join(__dirname, '../preload/preload.js'),
       webviewTag: true
     }
@@ -1078,6 +1176,89 @@ ipcMain.handle('privacy-clear-site-permissions', (event, hostname) => {
   return privacyService.clearSitePermissions(hostname);
 });
 
+ipcMain.handle('download-url', (event, url, options = {}) => {
+  if (!url) {
+    return { success: false, error: 'No URL provided' };
+  }
+
+  try {
+    const ownerWindow = BrowserWindow.fromWebContents(event.sender);
+
+    if (url.startsWith('data:')) {
+      const match = url.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
+      if (!match) {
+        return { success: false, error: 'Invalid data URL' };
+      }
+
+      const mimeType = match[1] || 'application/octet-stream';
+      const isBase64 = Boolean(match[2]);
+      const data = isBase64 ? Buffer.from(match[3], 'base64') : Buffer.from(decodeURIComponent(match[3]), 'utf8');
+      const extension = mime.extension(mimeType) || 'bin';
+
+      dialog.showSaveDialog(ownerWindow || undefined, {
+        title: options.title || 'Save File',
+        defaultPath: `download.${extension}`
+      }).then((result) => {
+        if (!result.canceled && result.filePath) {
+          fs.promises.writeFile(result.filePath, data).catch(error => {
+            console.error('[Download] Failed to save data URL:', error);
+          });
+        }
+      });
+
+      return { success: true };
+    }
+
+    const targetSession = session.fromPartition(options.partition || 'persist:main');
+    queueDownload(targetSession, url, {
+      title: options.title || 'Save File',
+      windowId: ownerWindow?.id
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('[Download] Failed to start download:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('copy-image-url', async (event, url) => {
+  if (!url) {
+    return { success: false, error: 'No image URL provided' };
+  }
+
+  try {
+    if (url.startsWith('data:image/')) {
+      const image = nativeImage.createFromDataURL(url);
+      if (image.isEmpty()) throw new Error('Image data could not be decoded');
+      clipboard.writeImage(image);
+      return { success: true };
+    }
+
+    const response = await net.fetch(url);
+    if (!response.ok) {
+      throw new Error(`Image request failed: ${response.status}`);
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const image = nativeImage.createFromBuffer(buffer);
+    if (image.isEmpty()) {
+      throw new Error('Image data could not be decoded');
+    }
+
+    clipboard.writeImage(image);
+    return { success: true };
+  } catch (error) {
+    console.error('[Clipboard] Failed to copy image:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('show-item-in-folder', async (event, pathToShow) => {
+  if (!pathToShow) return { success: false, error: 'No path provided' };
+  shell.showItemInFolder(pathToShow);
+  return { success: true };
+});
+
 // Favorites IPC handlers
 ipcMain.handle('favorites-get', () => {
   return favoritesService.getFavorites();
@@ -1161,7 +1342,13 @@ ipcMain.handle('get-url-suggestions', async (event, query) => {
   
   try {
     const https = require('https');
-    const url = `https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(query)}`;
+    const normalizedQuery = String(query || '').trim().toLowerCase();
+    const cachedSuggestions = suggestionCache.get(normalizedQuery);
+    if (cachedSuggestions) {
+      return cachedSuggestions;
+    }
+
+    const url = `https://www.startpage.com/osuggestions?q=${encodeURIComponent(query)}`;
     
     return new Promise((resolve, reject) => {
       https.get(url, (res) => {
@@ -1170,7 +1357,9 @@ ipcMain.handle('get-url-suggestions', async (event, query) => {
         res.on('end', () => {
           try {
             const parsed = JSON.parse(data);
-            resolve(parsed[1] || []);
+            const suggestions = parsed[1] || [];
+            suggestionCache.set(normalizedQuery, suggestions);
+            resolve(suggestions);
           } catch (e) {
             resolve([]);
           }

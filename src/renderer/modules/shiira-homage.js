@@ -1,28 +1,18 @@
 // Shiira Homage Module
-// Adds palette drawers, Tab Expose, page-turn transitions, and multi-search engines.
+// Adds palette drawers, Tab Expose, page-turn transitions, and Startpage search.
 
 const SEARCH_ENGINES = {
-  google: {
-    label: 'Google',
-    url: query => `https://www.google.com/search?q=${encodeURIComponent(query)}`
-  },
-  duckduckgo: {
-    label: 'DuckDuckGo',
-    url: query => `https://duckduckgo.com/?q=${encodeURIComponent(query)}`
-  },
-  brave: {
-    label: 'Brave',
-    url: query => `https://search.brave.com/search?q=${encodeURIComponent(query)}`
-  },
-  wikipedia: {
-    label: 'Wikipedia',
-    url: query => `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(query)}`
+  startpage: {
+    label: 'Startpage',
+    logo: 'shiira-asset://site-logos/Startpage.com_logo.svg',
+    url: query => `https://www.startpage.com/sp/search?query=${encodeURIComponent(query)}`
   }
 };
 
 export const ShiiraHomageMixin = {
   initShiiraHomage() {
-    this.currentSearchEngine = localStorage.getItem('shiira-search-engine') || 'google';
+    this.currentSearchEngine = 'startpage';
+    localStorage.setItem('shiira-search-engine', 'startpage');
     this.btnShiiraDrawer = document.getElementById('btn-shiira-drawer');
     this.shiiraDrawer = document.getElementById('shiira-drawer');
     this.btnCloseShiiraDrawer = document.getElementById('btn-close-shiira-drawer');
@@ -80,15 +70,20 @@ export const ShiiraHomageMixin = {
       button.classList.toggle('active', button.dataset.engine === this.currentSearchEngine);
     });
 
-    const engine = SEARCH_ENGINES[this.currentSearchEngine] || SEARCH_ENGINES.google;
+    const engine = SEARCH_ENGINES[this.currentSearchEngine] || SEARCH_ENGINES.startpage;
     if (this.homeSearch) {
       this.homeSearch.placeholder = `Search ${engine.label}...`;
+    }
+    const logoEl = document.querySelector('.search-box-logo');
+    if (logoEl && engine.logo) {
+      logoEl.src = engine.logo;
+      logoEl.alt = engine.label;
     }
   },
 
   buildSearchUrl(query) {
     const trimmed = (query || '').trim();
-    const engine = SEARCH_ENGINES[this.currentSearchEngine] || SEARCH_ENGINES.google;
+    const engine = SEARCH_ENGINES[this.currentSearchEngine] || SEARCH_ENGINES.startpage;
     return engine.url(trimmed);
   },
 

@@ -11,7 +11,7 @@ class PrivacyService {
         this.configPath = null;
         this.settings = {
             enableUrlSuggestions: true, // Default: enabled for convenience
-            suggestionsProvider: 'google', // 'google' or 'none'
+            suggestionsProvider: 'startpage', // 'startpage' or 'none'
             sitePermissions: {} // { hostname: { media: true/false, geolocation: true/false } }
         };
     }

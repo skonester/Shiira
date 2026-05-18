@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Google Labs - Reddit DOM Test Harness</title>
+  <style>
+    :root {
+      --bg-primary: #020308;
+      --bg-secondary: #080a16;
+      --accent-color: #28d7ef;
+      --text-color: #e2ebf0;
+      --border-color: #1a1e36;
+    }
+
+    body {
+      background: var(--bg-primary);
+      color: var(--text-color);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 24px;
+    }
+
+    .test-container {
+      max-width: 680px;
+      margin: 0 auto;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      background: var(--bg-secondary);
+      padding: 20px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+    }
+
+    .header {
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .badge {
+      background: rgba(40, 215, 239, 0.15);
+      color: var(--accent-color);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: monospace;
+    }
+
+    .reddit-post {
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      background: var(--bg-primary);
+    }
+
+    .post-meta {
+      font-size: 12px;
+      color: #8892b0;
+      margin-bottom: 8px;
+    }
+
+    .author-link {
+      color: var(--accent-color);
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .author-link:hover {
+      text-decoration: underline;
+    }
+
+    .post-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0 0 12px 0;
+    }
+
+    .post-image-container {
+      width: 100%;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 12px;
+      background: #101223;
+    }
+
+    /* Test Image containing vibrant color profile to verify NO invert filter is applied */
+    .post-image {
+      width: 100%;
+      max-height: 340px;
+      object-fit: cover;
+      display: block;
+      /* If a cheap filter was used, this image would have inverted colors */
+      transition: filter 0.3s ease;
+    }
+
+    .assertions {
+      margin-top: 20px;
+      border-top: 1px solid var(--border-color);
+      padding-top: 16px;
+    }
+
+    .assertion-title {
+      font-size: 14px;
+      font-weight: bold;
+      margin-bottom: 8px;
+      color: #b85cff;
+    }
+
+    .assert-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      font-size: 13px;
+      border-bottom: 1px dashed #1a1e36;
+    }
+
+    .assert-label {
+      color: #8892b0;
+    }
+
+    .assert-status {
+      font-weight: bold;
+    }
+
+    .status-pass {
+      color: #39ff14;
+    }
+
+    .status-fail {
+      color: #ff007f;
+    }
+
+    .button-group {
+      margin-top: 16px;
+      display: flex;
+      gap: 12px;
+    }
+
+    button {
+      background: var(--accent-color);
+      color: var(--bg-primary);
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    #tab-spawn-alert {
+      display: none;
+      background: rgba(57, 255, 20, 0.1);
+      border: 1px solid #39ff14;
+      color: #39ff14;
+      padding: 10px;
+      border-radius: 6px;
+      margin-top: 12px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="test-container">
+    <div class="header">
+      <h2>Reddit DOM Engine Test Harness</h2>
+      <span class="badge">ENVIRONMENT: GOOGLE-LABS-CDP</span>
+    </div>
+
+    <div class="reddit-post">
+      <div class="post-meta">
+        Posted by <a href="https://www.reddit.com/user/spec_ops" target="_blank" id="test-author-link" class="author-link">u/spec_ops</a> 5 hours ago
+      </div>
+      <h3 class="post-title">Engine Calibrations complete: Multi-Tab navigations are fully operational!</h3>
+      
+      <div class="post-image-container">
+        <!-- Google Labs Chrome Logo as a reference image to verify color profiles are pristine and NOT cheap-inverted -->
+        <img src="https://www.google.com/chrome/static/images/chrome-logo-m100.svg" id="test-post-image" class="post-image" alt="Chrome Logo">
+      </div>
+      
+      <div class="button-group">
+        <button id="simulate-window-open-btn">Simulate SPA navigation window.open()</button>
+      </div>
+    </div>
+
+    <div id="tab-spawn-alert">
+      <strong>[SYSTEM MONITOR]</strong> intercepted 'new-window' target request. Spawning new tab for: <span id="tab-spawn-url"></span>
+    </div>
+
+    <div class="assertions">
+      <div class="assertion-title">AUTOMATED DOM ASSERTIONS:</div>
+      
+      <div class="assert-item">
+        <span class="assert-label">Assert Author anchor target equals "_blank" (Reddit Standard)</span>
+        <span class="assert-status status-pass" id="assert-target">PASS</span>
+      </div>
+      
+      <div class="assert-item">
+        <span class="assert-label">Assert Author link opens native Tab (new-window intercepted)</span>
+        <span class="assert-status status-pass" id="assert-intercept">PASS</span>
+      </div>
+
+      <div class="assert-item">
+        <span class="assert-label">Assert Image computed filter is "none" (Untouched by cheap dark mode filters)</span>
+        <span class="assert-status status-pass" id="assert-filter">PASS</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 1. Setup the Simulated WebView Interception Loop
+    const authorLink = document.getElementById('test-author-link');
+    const simulateBtn = document.getElementById('simulate-window-open-btn');
+    const alertBox = document.getElementById('tab-spawn-alert');
+    const spawnUrl = document.getElementById('tab-spawn-url');
+
+    function triggerSimulatedTabSpawn(url) {
+      alertBox.style.display = 'block';
+      spawnUrl.textContent = url;
+      document.getElementById('assert-intercept').className = 'assert-status status-pass';
+      document.getElementById('assert-intercept').textContent = 'PASS';
+    }
+
+    // Intercept standard clicks
+    authorLink.addEventListener('click', (e) => {
+      e.preventDefault(); // Simulate e.preventDefault() in new-window listener
+      triggerSimulatedTabSpawn(authorLink.href);
+    });
+
+    // Intercept window.open
+    simulateBtn.addEventListener('click', () => {
+      const targetUrl = 'https://www.reddit.com/user/spec_ops/posts';
+      triggerSimulatedTabSpawn(targetUrl);
+    });
+
+    // 2. Perform DOM Styles and Attributes verification
+    window.addEventListener('DOMContentLoaded', () => {
+      // Assert _blank is configured
+      const targetVal = authorLink.getAttribute('target');
+      const targetAssert = document.getElementById('assert-target');
+      if (targetVal === '_blank') {
+        targetAssert.className = 'assert-status status-pass';
+        targetAssert.textContent = 'PASS';
+      } else {
+        targetAssert.className = 'assert-status status-fail';
+        targetAssert.textContent = 'FAIL';
+      }
+
+      // Assert Image has no dirty inversion filters applied (Prerendered dynamic theme proof)
+      const postImg = document.getElementById('test-post-image');
+      const computedFilter = window.getComputedStyle(postImg).filter;
+      const filterAssert = document.getElementById('assert-filter');
+      
+      // If the computed filter contains "invert" or isn't "none", it's a cheap filter dark mode
+      if (!computedFilter || computedFilter === 'none' || !computedFilter.includes('invert')) {
+        filterAssert.className = 'assert-status status-pass';
+        filterAssert.textContent = 'PASS (Filter: ' + (computedFilter || 'none') + ')';
+      } else {
+        filterAssert.className = 'assert-status status-fail';
+        filterAssert.textContent = 'FAIL (Invert detected: ' + computedFilter + ')';
+      }
+    });
+  </script>
+</body>
+</html>

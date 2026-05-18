@@ -45,6 +45,9 @@ contextBridge.exposeInMainWorld('shiiraAPI', {
   // Window management
   createNewWindow: (url) => ipcRenderer.invoke('create-new-window', url),
   createPasswordAnvilWindow: () => ipcRenderer.invoke('create-password-anvil-window'),
+  downloadFile: (url, options) => ipcRenderer.invoke('download-url', url, options),
+  copyImage: (url) => ipcRenderer.invoke('copy-image-url', url),
+  showItemInFolder: (pathToShow) => ipcRenderer.invoke('show-item-in-folder', pathToShow),
   
   // Session management (tab persistence)
   session: {

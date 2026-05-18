@@ -79,6 +79,7 @@ export const WebviewEventsMixin = {
       self.injectCosmeticCSS(webview, e.url);
       self.injectAdBlockScript(webview, e.url);
       self.injectPasswordAutofill(webview, e.url);
+      self.injectLinkRouting(webview, e.url);
       self.injectForcedDarkMode?.(webview, e.url);
     });
     
@@ -90,6 +91,7 @@ export const WebviewEventsMixin = {
           self.injectAdBlockScript(webview, url);
           self.injectCosmeticCSS(webview, url);
           self.injectPasswordAutofill(webview, url);
+          self.injectLinkRouting(webview, url);
           self.injectForcedDarkMode?.(webview, url);
           if (tabId === self.activeTabId) {
             self.updateNavigationButtons();
@@ -120,28 +122,17 @@ export const WebviewEventsMixin = {
         self.addToHistory(e.url, title, favicon);
         self.injectCosmeticCSS(webview, e.url);
         self.injectAdBlockScript(webview, e.url);
+        self.injectLinkRouting(webview, e.url);
         self.injectForcedDarkMode?.(webview, e.url);
       }
     });
     
     webview.addEventListener('new-window', (e) => {
       console.log('[Webview] New window event:', e.url, e.disposition);
+      e.preventDefault?.();
       
-      // Check if this is likely an OAuth popup based on URL patterns
-      const isOAuthPopup = 
-        e.url.includes('oauth') ||
-        e.url.includes('accounts.google.com') ||
-        e.url.includes('login.microsoftonline.com') ||
-        e.url.includes('facebook.com/login') ||
-        e.url.includes('github.com/login') ||
-        e.url.includes('/auth');
-      
-      if (isOAuthPopup) {
-        console.log('[Webview] OAuth popup detected - window handled by main process');
-        // OAuth popups will be handled by setWindowOpenHandler in main.js
-      } else {
-        console.log('[Webview] Regular link - opening in new tab');
-        self.createTab(e.url);
+      if (e.url && e.url !== 'about:blank') {
+        self.openLinkInTabOnce(e.url);
       }
     });
     
@@ -188,6 +179,14 @@ export const WebviewEventsMixin = {
     
     // Console message handling for ad blocking and passwords
     webview.addEventListener('console-message', (e) => {
+      if (e.message && e.message.startsWith('[SHIIRA_OPEN_LINK] ')) {
+        const url = e.message.slice('[SHIIRA_OPEN_LINK] '.length).trim();
+        if (url && url !== 'about:blank') {
+          self.openLinkInTabOnce(url);
+        }
+        return;
+      }
+
       if (e.message && e.message.startsWith('[SHIIRA_AD_BLOCKED]')) {
         const count = parseInt(e.message.split(' ')[1], 10);
         const tab = self.tabs.find(t => t.id === tabId);
@@ -223,5 +222,70 @@ export const WebviewEventsMixin = {
       if (tab) tab.audioCheckInterval = interval;
       checkAudioState();
     }, { once: true });
+  },
+
+  openLinkInTabOnce(url) {
+    if (!url || url === 'about:blank') return;
+
+    const now = Date.now();
+    if (!this._recentlyOpenedLinks) {
+      this._recentlyOpenedLinks = new Map();
+    }
+
+    for (const [key, time] of this._recentlyOpenedLinks) {
+      if (now - time > 1500) {
+        this._recentlyOpenedLinks.delete(key);
+      }
+    }
+
+    const previous = this._recentlyOpenedLinks.get(url);
+    if (previous && now - previous < 1000) {
+      return;
+    }
+
+    this._recentlyOpenedLinks.set(url, now);
+    this.createTab(url);
+  },
+
+  injectLinkRouting(webview, url) {
+    if (!webview || !url || isInternalUrl(url) || url === 'about:blank') return;
+
+    const script = `
+      (() => {
+        if (window.__shiiraLinkRoutingInstalled) return;
+        window.__shiiraLinkRoutingInstalled = true;
+
+        const shouldOpenInTab = (event, anchor) => {
+          if (!anchor || !anchor.href) return false;
+          const href = anchor.href;
+          if (!/^https?:\\/\\//i.test(href)) return false;
+          const target = (anchor.getAttribute('target') || '').toLowerCase();
+          const rel = (anchor.getAttribute('rel') || '').toLowerCase();
+          return event.type === 'auxclick' ||
+            event.button === 1 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            target === '_blank' ||
+            target === 'blank' ||
+            rel.includes('external');
+        };
+
+        const route = event => {
+          const anchor = event.target?.closest?.('a[href]');
+          if (!shouldOpenInTab(event, anchor)) return;
+          event.preventDefault();
+          event.stopPropagation();
+          console.log('[SHIIRA_OPEN_LINK] ' + anchor.href);
+        };
+
+        document.addEventListener('click', route, true);
+        document.addEventListener('auxclick', route, true);
+      })();
+    `;
+
+    webview.executeJavaScript(script, true).catch(error => {
+      console.warn('[Webview] Failed to inject link routing:', error);
+    });
   }
 };

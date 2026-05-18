@@ -62,18 +62,18 @@ export const UrlSuggestionsMixin = {
     // Get history suggestions
     const historySuggestions = this.getHistorySuggestions(query);
     
-    // Get search suggestions from Google
+    // Get search suggestions from Startpage
     let searchSuggestions = [];
     try {
       const response = await fetch(
-        `https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(query)}`
+        `https://www.startpage.com/osuggestions?q=${encodeURIComponent(query)}`
       );
       const data = await response.json();
       if (data && data[1]) {
         searchSuggestions = data[1].slice(0, 5).map(s => ({
           type: 'search',
           text: s,
-          url: `https://www.google.com/search?q=${encodeURIComponent(s)}`
+          url: `https://www.startpage.com/sp/search?query=${encodeURIComponent(s)}`
         }));
       }
     } catch (e) {
@@ -167,12 +167,12 @@ export const UrlSuggestionsMixin = {
                onerror="this.src='shiira-asset://ui-icons/globe.svg'">`
         : '';
       
-      // Right icon: type indicator (Google or History)
+      // Right icon: type indicator (Startpage or History)
       const isHistory = s.type === 'history';
       const rightIcon = isHistory 
         ? 'shiira-asset://ui-icons/history.svg'
-        : 'shiira-asset://site-logos/Google.svg';
-      const iconClass = isHistory ? 'history' : 'google';
+        : 'shiira-asset://site-logos/Startpage.com_logo.svg';
+      const iconClass = isHistory ? 'history' : 'startpage';
       
       html += `
         <div class="url-suggestion ${isSelected ? 'selected' : ''}" data-index="${i}">

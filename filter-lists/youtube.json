@@ -1,14 +1,5 @@
 [
   {
-    "id": 1000,
-    "priority": 30,
-    "action": { "type": "block" },
-    "condition": {
-      "urlFilter": "*googlevideo.com/*ctier=L*"
-    },
-    "comment": "Block YouTube ad video streams (ctier=L indicates ad) - HIGH PRIORITY, all resource types"
-  },
-  {
     "id": 1001,
     "priority": 15,
     "action": { "type": "block" },
@@ -109,16 +100,6 @@
     "comment": "Block YouTube CSI tracking"
   },
   {
-    "id": 1012,
-    "priority": 15,
-    "action": { "type": "block" },
-    "condition": {
-      "urlFilter": "*yt3.ggpht.com/ytc/*",
-      "resourceTypes": ["image"]
-    },
-    "comment": "Block YouTube ad thumbnails"
-  },
-  {
     "id": 1013,
     "priority": 15,
     "action": { "type": "block" },
@@ -189,15 +170,6 @@
       "urlFilter": "*youtube.com/*&aitags=*"
     },
     "comment": "Block requests with ad aitags"
-  },
-  {
-    "id": 1021,
-    "priority": 30,
-    "action": { "type": "block" },
-    "condition": {
-      "urlFilter": "*ctier=L*"
-    },
-    "comment": "Block googlevideo ad streams (ctier=L) - HIGH PRIORITY, all resource types"
   },
   {
     "id": 2000,

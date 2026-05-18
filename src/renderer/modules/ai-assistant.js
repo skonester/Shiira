@@ -179,8 +179,8 @@ export const AIAssistantMixin = {
     // Create or reuse webview
     if (!this.aiWebview) {
       this.aiWebview = document.createElement('webview');
-      this.aiWebview.setAttribute('allowpopups', '');
       this.aiWebview.setAttribute('partition', 'persist:ai');
+      this.aiWebview.setAttribute('webpreferences', 'contextIsolation=yes,backgroundThrottling=no,v8CacheOptions=bypassHeatCheckAndEagerCompile');
       this.aiWebview.className = 'ai-webview';
       this.aiWebviewContainer.appendChild(this.aiWebview);
     }

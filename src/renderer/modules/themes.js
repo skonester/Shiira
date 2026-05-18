@@ -99,6 +99,9 @@ export const ThemesMixin = {
         root.style.setProperty('--accent', '#28d7ef');
         root.style.setProperty('--accent-hover', '#b85cff');
         root.style.setProperty('--accent-pink', '#ff4d9f');
+        root.style.setProperty('--accent-rgb', '40, 215, 239');
+        root.style.setProperty('--accent-hover-rgb', '184, 92, 255');
+        root.style.setProperty('--accent-pink-rgb', '255, 77, 159');
         root.style.setProperty('--text-primary', '#f2fbff');
         root.style.setProperty('--text-secondary', '#9fb4c1');
         root.style.setProperty('--border', '#19243b');
@@ -132,6 +135,10 @@ export const ThemesMixin = {
         root.style.setProperty('--bg-tertiary', '#2a2a2a');
         root.style.setProperty('--accent', '#ff961E');
         root.style.setProperty('--accent-hover', '#ff961E');
+        root.style.setProperty('--accent-pink', '#ff4d9f');
+        root.style.setProperty('--accent-rgb', '255, 150, 30');
+        root.style.setProperty('--accent-hover-rgb', '255, 150, 30');
+        root.style.setProperty('--accent-pink-rgb', '255, 77, 159');
         root.style.setProperty('--text-primary', '#eaeaea');
         root.style.setProperty('--text-secondary', '#888888');
         root.style.setProperty('--border', '#333333');
@@ -167,6 +174,9 @@ export const ThemesMixin = {
         root.style.setProperty('--bg-tertiary', '#101010');
         root.style.setProperty('--accent', '#ff961E');
         root.style.setProperty('--accent-hover', '#ffb347');
+        root.style.setProperty('--accent-rgb', '255, 150, 30');
+        root.style.setProperty('--accent-hover-rgb', '255, 179, 71');
+        root.style.setProperty('--accent-pink-rgb', '255, 77, 159');
         root.style.setProperty('--text-primary', '#f5f2ea');
         root.style.setProperty('--text-secondary', '#a7a098');
         root.style.setProperty('--border', '#24211d');
@@ -204,6 +214,10 @@ export const ThemesMixin = {
         root.style.setProperty('--bg-tertiary', '#1f1f1f');
         root.style.setProperty('--accent', '#CC0000');
         root.style.setProperty('--accent-hover', '#CC0000');
+        root.style.setProperty('--accent-pink', '#ff3232');
+        root.style.setProperty('--accent-rgb', '204, 0, 0');
+        root.style.setProperty('--accent-hover-rgb', '204, 0, 0');
+        root.style.setProperty('--accent-pink-rgb', '255, 50, 50');
         root.style.setProperty('--text-primary', '#eaeaea');
         root.style.setProperty('--text-secondary', '#888888');
         root.style.setProperty('--border', '#2a2a2a');
@@ -241,6 +255,10 @@ export const ThemesMixin = {
         root.style.setProperty('--bg-tertiary', '#1a1a1a');
         root.style.setProperty('--accent', '#4A7C9D');
         root.style.setProperty('--accent-hover', '#4A7C9D');
+        root.style.setProperty('--accent-pink', '#64a0c8');
+        root.style.setProperty('--accent-rgb', '74, 124, 157');
+        root.style.setProperty('--accent-hover-rgb', '74, 124, 157');
+        root.style.setProperty('--accent-pink-rgb', '100, 160, 200');
         root.style.setProperty('--text-primary', '#c0c0c0');
         root.style.setProperty('--text-secondary', '#808080');
         root.style.setProperty('--border', '#2a2a2a');
@@ -278,6 +296,10 @@ export const ThemesMixin = {
         root.style.setProperty('--bg-tertiary', '#2a1915');
         root.style.setProperty('--accent', '#A67C52');
         root.style.setProperty('--accent-hover', '#A67C52');
+        root.style.setProperty('--accent-pink', '#c89664');
+        root.style.setProperty('--accent-rgb', '166, 124, 82');
+        root.style.setProperty('--accent-hover-rgb', '166, 124, 82');
+        root.style.setProperty('--accent-pink-rgb', '200, 150, 100');
         root.style.setProperty('--text-primary', '#D4BFA8');
         root.style.setProperty('--text-secondary', '#8a7866');
         root.style.setProperty('--border', '#2d1f1a');
@@ -315,6 +337,10 @@ export const ThemesMixin = {
         root.style.setProperty('--bg-tertiary', '#2c2c2c');
         root.style.setProperty('--accent', '#FF87F4');
         root.style.setProperty('--accent-hover', '#FF87F4');
+        root.style.setProperty('--accent-pink', '#ff54f0');
+        root.style.setProperty('--accent-rgb', '255, 135, 244');
+        root.style.setProperty('--accent-hover-rgb', '255, 135, 244');
+        root.style.setProperty('--accent-pink-rgb', '255, 84, 240');
         root.style.setProperty('--text-primary', '#eaeaea');
         root.style.setProperty('--text-secondary', '#888888');
         root.style.setProperty('--border', '#333333');
