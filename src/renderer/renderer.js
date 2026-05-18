@@ -69,7 +69,9 @@ class ShiiraBrowser {
     this.siteLogos = {
       'search.brave.com': 'shiira-asset://site-logos/brave-search.svg',
       'www.startpage.com': 'shiira-asset://site-logos/Startpage.com_logo.svg',
-      'startpage.com': 'shiira-asset://site-logos/Startpage.com_logo.svg'
+      'startpage.com': 'shiira-asset://site-logos/Startpage.com_logo.svg',
+      'scira.ai': 'shiira-asset://site-logos/scira.svg',
+      'www.scira.ai': 'shiira-asset://site-logos/scira.svg'
     };
     
     // Drag state
@@ -481,10 +483,18 @@ class ShiiraBrowser {
     
     // Home search
     if (this.homeSearch) {
-      this.homeSearch.addEventListener('keydown', (e) => {
+      this.homeSearch.addEventListener('keydown', async (e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
-          this.navigate(this.homeSearch.value);
+          const query = this.homeSearch.value.trim();
+          if (!query) return;
+          
+          // If Scira is selected, show AI search results inline
+          if (this.currentSearchEngine === 'scira') {
+            await this.performAISearch(query);
+          } else {
+            this.navigate(query);
+          }
           this.homeSearch.value = '';
           this.homeSearch.blur();
         }

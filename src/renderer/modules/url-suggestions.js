@@ -80,8 +80,29 @@ export const UrlSuggestionsMixin = {
       // Ignore search suggestion errors
     }
     
-    // Combine and dedupe suggestions
-    this.suggestions = [...historySuggestions, ...searchSuggestions].slice(0, 8);
+    // Get AI-powered suggestions from Scira
+    let sciraSuggestions = [];
+    try {
+      const sciraResponse = await fetch(
+        `https://scira.ai/api/suggest?q=${encodeURIComponent(query)}`,
+        { signal: AbortSignal.timeout(1000) }
+      );
+      if (sciraResponse.ok) {
+        const sciraData = await sciraResponse.json();
+        if (sciraData && sciraData.suggestions) {
+          sciraSuggestions = sciraData.suggestions.slice(0, 3).map(s => ({
+            type: 'ai',
+            text: s,
+            url: `https://scira.ai/?q=${encodeURIComponent(s)}`
+          }));
+        }
+      }
+    } catch (e) {
+      // Ignore Scira suggestion errors
+    }
+    
+    // Combine and dedupe suggestions (AI first, then search, then history)
+    this.suggestions = [...sciraSuggestions, ...searchSuggestions, ...historySuggestions].slice(0, 8);
     this.selectedSuggestionIndex = -1;
     this.renderSuggestions();
   },

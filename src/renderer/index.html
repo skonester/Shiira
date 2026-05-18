@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' shiira-asset:; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src * data: blob: 'self' shiira-asset:; frame-src *; child-src *; connect-src 'self' https://www.startpage.com https://search.brave.com;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' shiira-asset:; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src * data: blob: 'self' shiira-asset:; frame-src *; child-src *; connect-src 'self' https://www.startpage.com https://search.brave.com https://scira.ai https://*.scira.ai https://api.duckduckgo.com https://en.wikipedia.org;">
   <title>Shiira</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -158,7 +158,7 @@
             <div class="welcome-title-small">quiet by default</div>
             <div class="welcome-title-large">Shiira</div>
           </div>
-          <p class="welcome-copy">A dark, personal browser for people who still want the web to feel like theirs.</p>
+          <p class="welcome-copy">A Dark, personal browser. Smart enough for AI, restrained enough to stay clean. The balance you need.</p>
           <div class="search-box">
             <input type="text" id="home-search" placeholder="Search Brave...">
             <img class="search-box-logo" src="shiira-asset://site-logos/brave-search.svg" alt="Brave">
@@ -166,9 +166,16 @@
           <div class="search-engine-chips">
             <button class="search-engine-chip active" data-engine="brave">Brave</button>
             <button class="search-engine-chip" data-engine="startpage">Startpage</button>
+            <button class="search-engine-chip" data-engine="scira">Scira AI</button>
           </div>
-          <div class="bring-your-own-ai">
-            <span>AI is kept out of the browser chrome. Use your own tools, accounts, and judgment from the web.</span>
+          <div class="ai-search-results hidden" id="ai-search-results">
+            <div class="ai-search-header">
+              <span class="ai-badge">Instant Results</span>
+              <button class="ai-search-close" id="ai-search-close">×</button>
+            </div>
+            <div class="ai-search-content" id="ai-search-content">
+              <div class="ai-loading">Searching...</div>
+            </div>
           </div>
         </div>
       </div>
@@ -498,7 +505,7 @@
           <img src="shiira-asset://shiira.png" alt="Shiira Logo" width="80" height="80">
         </div>
         <div class="about-title">Shiira Browser</div>
-        <div class="about-version" id="about-version">Version 0.1.0-alpha</div>
+        <div class="about-version" id="about-version">Version 0.3.1</div>
         <div class="about-description">
           Shiira is a dark, small-surface browser project for private browsing,
           saved places, and fewer distractions.

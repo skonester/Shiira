@@ -237,7 +237,11 @@ const TextContextMenuMixin = {
         if (input.selectionStart !== input.selectionEnd) {
           const selectedText = input.value.substring(input.selectionStart, input.selectionEnd);
           await navigator.clipboard.writeText(selectedText);
-          document.execCommand('delete');
+          const start = input.selectionStart;
+          const end = input.selectionEnd;
+          input.value = input.value.substring(0, start) + input.value.substring(end);
+          input.setSelectionRange(start, start);
+          input.dispatchEvent(new Event('input', { bubbles: true }));
         }
         break;
         
@@ -251,7 +255,12 @@ const TextContextMenuMixin = {
       case 'paste':
         try {
           const text = await navigator.clipboard.readText();
-          document.execCommand('insertText', false, text);
+          const start = input.selectionStart;
+          const end = input.selectionEnd;
+          input.value = input.value.substring(0, start) + text + input.value.substring(end);
+          input.setSelectionRange(start + text.length, start + text.length);
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.focus();
         } catch (err) {
           console.error('[TextContextMenu] Paste failed:', err);
         }
@@ -259,7 +268,11 @@ const TextContextMenuMixin = {
         
       case 'delete':
         if (input.selectionStart !== input.selectionEnd) {
-          document.execCommand('delete');
+          const start = input.selectionStart;
+          const end = input.selectionEnd;
+          input.value = input.value.substring(0, start) + input.value.substring(end);
+          input.setSelectionRange(start, start);
+          input.dispatchEvent(new Event('input', { bubbles: true }));
         }
         break;
         

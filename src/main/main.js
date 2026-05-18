@@ -101,6 +101,9 @@ function preconnectBrowserSession(sessionInstance) {
   [
     'https://www.startpage.com',
     'https://search.brave.com',
+    'https://scira.ai',
+    'https://api.duckduckgo.com',
+    'https://en.wikipedia.org',
     'https://www.reddit.com',
     'https://styles.redditmedia.com',
     'https://preview.redd.it',

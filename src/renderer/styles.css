@@ -1715,6 +1715,156 @@ webview.active {
   box-shadow: 0 0 18px rgba(var(--accent-rgb), 0.16);
 }
 
+.ai-search-results {
+  position: relative;
+  width: 500px;
+  max-width: 90vw;
+  margin-top: 16px;
+  background: linear-gradient(180deg, rgba(15, 20, 35, 0.95), rgba(10, 15, 25, 0.95));
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  border-radius: 16px;
+  padding: 16px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.ai-search-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(var(--accent-rgb), 0.15);
+}
+
+.ai-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.15);
+  padding: 4px 10px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ai-search-close {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 20px;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.ai-search-close:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.ai-search-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.ai-search-content a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.ai-search-content a:visited {
+  color: var(--accent-pink);
+}
+
+.ai-search-content a:hover {
+  text-decoration: underline;
+}
+
+.ai-loading {
+  text-align: center;
+  padding: 20px;
+  color: var(--accent);
+}
+
+.ai-answer h3 {
+  color: var(--text-primary);
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+
+.ai-answer p {
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.ai-answer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.ai-answer a:visited {
+  color: var(--accent-pink);
+}
+
+.ai-answer a:hover {
+  text-decoration: underline;
+}
+
+.ai-related h4 {
+  color: var(--text-primary);
+  font-size: 13px;
+  margin: 12px 0 8px;
+}
+
+.ai-related ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.ai-related li {
+  margin: 6px 0;
+}
+
+.ai-related a {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.ai-related a:visited {
+  color: var(--accent-pink);
+}
+
+.ai-related a:hover {
+  text-decoration: underline;
+}
+
+.ai-error, .ai-fallback {
+  text-align: center;
+  padding: 16px;
+}
+
+.ai-error a, .ai-fallback a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.ai-error a:visited, .ai-fallback a:visited {
+  color: var(--accent-pink);
+}
+
+.ai-error a:hover, .ai-fallback a:hover {
+  text-decoration: underline;
+}
+
 .bring-your-own-ai {
   width: min(520px, 90vw);
   margin: 18px auto 0;
