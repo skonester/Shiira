@@ -1,0 +1,23 @@
+SPDX-License-Identifier: GPL-3.0-only
+
+Shiira Browser
+Copyright (C) 2026 Shiira Project
+
+This project is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, version 3 of the License only.
+
+This project is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this project. If not, see https://www.gnu.org/licenses/gpl-3.0.en.html.
+
+License transition note:
+
+The historical Shiira browser was described by its own project materials as
+being available under BSD-3-Clause. This repository is a new Electron-based
+reimagining and homage, and future distribution of this codebase is under
+GPL-3.0-only. The BSD heritage is acknowledged for historical continuity; it
+does not change the license of this repository's new code.
