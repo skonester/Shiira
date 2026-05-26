@@ -2,101 +2,104 @@
   <img src="Shiira.png" width="128" height="128" alt="Shiira Logo" />
 </p>
 
+<p align="center">
+  <img src="github.png" width="420" alt="Shiira Browser GitHub preview" />
+</p>
+
 # Shiira Browser <img src="GPL3.png" align="right" height="48" alt="GPLv3 Logo" />
 
-A super dark Electron browser inspired by the classic **Shiira** project for Mac OS X.
+Shiira is an Electron-based desktop browser inspired by the classic Shiira browser for Mac OS X. It combines a dark custom interface with practical browser features such as tab management, bookmarks, history, ad blocking, session restore, password storage, and an assistant sidebar.
 
-This rebrand keeps the project's practical, high-performance browser foundation and meticulously turns the user interface chrome into a premium, state-of-the-art **Shiira** homage:
+The project is a modern homage rather than a port. It does not depend on original Shiira source code; the design direction is based on public descriptions of the original browser and its interface ideas.
 
-- **The Colors of the Deep**: Inspired by the original browser's namesake (the Mahi-mahi or "Shiira" in Japanese), the interface shines with a stunning custom-tailored dark color palette:
-  - **Cyan Surf Accent (`#28d7ef`)**: Reflects glowing tropical waters, highlighting focus states, active borders, and primary navigation actions.
-  - **Luminous Violet Hover (`#b85cff`)**: Recreates the shimmery deep-water effect, showing up during user interactions and button hover transitions.
-  - **Hot-Pink Fins (`#ff4d9f`)**: Adds a vibrant, energetic visual touch, indicating alerts, warnings, and special tab states (like private browsing tabs).
-- **Atmospheric Glassmorphism**: High-end frosted glass overlays (`rgba(8, 10, 22, 0.76)`) and dual glowing radial gradients (cyan glow at the top-left, violet glow at the top-right) blend into a deep black background, making the browser chrome feel responsive, premium, and alive.
-- **Fluid Motion & Cascades**:
-  - Tab switching and operations use smooth sliding animations (`slideUp` and `slideDown`).
-  - Autocomplete search suggestions cascade downwards gracefully with incremental delays (`0ms` to `225ms`), ensuring a premium tactile feel.
+## Highlights
 
-## Shiira Homage
-
-- **Tab Expose** - View every open tab as a full-window grid, inspired by Shiira's Tab Expose feature.
-- **Page-turn motion** - Navigating and switching tabs uses a quick page-turn transition as a nod to Shiira 1.x.
-- **Palette drawer** - Bookmarks, History, Cache, and RSS live in a left-side drawer inspired by Shiira's customizable drawer/palette UI.
-- **Many search engines** - The home search supports Google, DuckDuckGo, Brave, and Wikipedia, echoing Shiira's multi-engine toolbar search.
-- **Thumbnail-style tabs** - The Expose view gives each tab a visual preview panel for faster selection.
-- **Cache controls** - Clear cache, cookies, and site storage from the Shiira drawer, with an optional clear-on-exit mode.
-
-## Original Feature Parity
-
-The final original Shiira 2.3 listing called out these everyday browsing features. Current status:
-
-| Original Shiira feature                             | Status in this build                          |
-| --------------------------------------------------- | --------------------------------------------- |
-| Tabbed windows                                      | Implemented                                   |
-| Bookmark management                                 | Implemented                                   |
-| Side drawer showing bookmarks and history           | Implemented as Shiira palettes                |
-| Bookmarks toolbar                                   | Implemented                                   |
-| Search field with choice of search engine           | Implemented                                   |
-| Cache control panel                                 | Implemented in the Cache palette              |
-| Removing cookies and cache at termination           | Implemented as a Cache palette toggle         |
-| Window appearance switching                         | Implemented as themes                         |
-| Displaying favicons                                 | Implemented                                   |
-| Search text field for history                       | Implemented                                   |
-| Sharing bookmarks with Safari                       | Not implemented; Chrome import exists instead |
-| Customizing toolbar and toolbar icon switching      | Not implemented                               |
-| Favicon list and per-bookmark favicon toggle        | Not implemented                               |
-| Help document                                       | Not implemented                               |
-| Multiple source windows and HTTP header source view | Not implemented                               |
-| Wheel button tab operations                         | Not implemented                               |
-| Auto-tab for bookmark folders                       | Not implemented                               |
-| Back-forward list on toolbar buttons                | Not implemented                               |
-
-## Features
-
-- Native ad blocker with network and cosmetic filtering
+- Dark custom browser chrome with the Shiira Night theme
+- Tabbed browsing with drag support, audio mute indicators, and lazy session restore
+- Full-window Tab Expose view for switching between open tabs
+- Drawer-style panels for bookmarks, history, cache controls, and RSS
+- Bookmarks bar, favorites launcher, and Chrome bookmark import
+- Search from the home view with Google, DuckDuckGo, Brave, and Wikipedia
+- Native ad blocking with network and cosmetic filtering
 - Password manager with secure storage and CSV import
-- History and bookmarks management
-- Favorites launcher
-- Session restore with lazy tab loading
-- AI assistant sidebar
-- Custom themes, now led by **Shiira Night**
-- Custom titlebar, tab dragging, audio mute indicators, and update checks
+- Cache, cookie, and site storage cleanup tools
+- Optional clear-on-exit cache behavior
+- Built-in update checks
 
-## Shortcuts
+## Shiira-Inspired Features
 
-| Shortcut         | Action                  |
-| ---------------- | ----------------------- |
-| `Ctrl+T`         | New tab                 |
-| `Ctrl+W`         | Close tab               |
-| `Ctrl+Shift+T`   | Reopen closed tab       |
-| `Ctrl+Tab`       | Next tab                |
-| `Ctrl+Shift+Tab` | Previous tab            |
-| `Ctrl+L`         | Focus URL bar           |
-| `Ctrl+R` / `F5`  | Reload                  |
-| `Ctrl+Shift+R`   | Hard reload             |
-| `Alt+Left`       | Back                    |
-| `Alt+Right`      | Forward                 |
-| `Ctrl+H`         | History                 |
-| `Ctrl+Shift+B`   | Toggle bookmarks bar    |
-| `Ctrl+Shift+E`   | Tab Expose              |
-| `Ctrl+Shift+I`   | Developer tools         |
-| `Escape`         | Close popups and panels |
+| Feature | Current status |
+| --- | --- |
+| Tabbed windows | Implemented |
+| Bookmark management | Implemented |
+| Side drawer for bookmarks and history | Implemented as Shiira palettes |
+| Bookmarks toolbar | Implemented |
+| Search field with selectable search engine | Implemented |
+| Cache control panel | Implemented in the Cache palette |
+| Remove cookies and cache at termination | Implemented as a Cache palette toggle |
+| Window appearance switching | Implemented as themes |
+| Favicons | Implemented |
+| Searchable history | Implemented |
+| Safari bookmark sharing | Not implemented; Chrome import is available |
+| Toolbar customization and toolbar icon switching | Not implemented |
+| Favicon list and per-bookmark favicon toggle | Not implemented |
+| Help document | Not implemented |
+| Multiple source windows and HTTP header source view | Not implemented |
+| Wheel-button tab operations | Not implemented |
+| Auto-tab for bookmark folders | Not implemented |
+| Back/forward list on toolbar buttons | Not implemented |
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+T` | New tab |
+| `Ctrl+W` | Close tab |
+| `Ctrl+Shift+T` | Reopen closed tab |
+| `Ctrl+Tab` | Next tab |
+| `Ctrl+Shift+Tab` | Previous tab |
+| `Ctrl+L` | Focus URL bar |
+| `Ctrl+R` / `F5` | Reload |
+| `Ctrl+Shift+R` | Hard reload |
+| `Alt+Left` | Back |
+| `Alt+Right` | Forward |
+| `Ctrl+H` | History |
+| `Ctrl+Shift+B` | Toggle bookmarks bar |
+| `Ctrl+Shift+E` | Tab Expose |
+| `Ctrl+Shift+I` | Developer tools |
+| `Escape` | Close popups and panels |
 
 ## Development
 
+Install dependencies:
+
 ```bash
 npm install
+```
+
+Run the app in development mode:
+
+```bash
 npm run dev
 ```
 
 ## Build
 
+Create a production build:
+
 ```bash
 npm run build
+```
+
+Platform-specific builds are also available:
+
+```bash
 npm run build:win
 npm run build:mac
 npm run build:linux
 ```
+
+Build artifacts are written to `dist/`.
 
 ## Project Structure
 
@@ -108,12 +111,13 @@ src/renderer/modules/     Browser feature modules
 assets/                   App artwork, UI icons, and site logos
 filter-lists/             Ad-blocking rules
 build/                    Build hooks and installer assets
+installer/                Installer UI
 ```
 
 ## License
 
 Shiira Browser is licensed under **GPL-3.0-only**.
 
-The original Shiira project was published under **BSD-3-Clause**. This reimagined Electron codebase now transitions to GPLv3 for future changes and redistribution. No original Shiira source code is required for this rebrand; the homage is based on public feature descriptions and visual direction.
+The original Shiira project was released under **BSD-3-Clause**. This project is an independent Electron implementation and homage, with no original Shiira source code included.
 
-For full copyright attributions, developer biography, historical background, and detailed dependency licensing, please see the [credits.md](credits.md) file.
+For copyright attributions, project background, and dependency licensing details, see [credits.md](credits.md).
