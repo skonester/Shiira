@@ -8,7 +8,7 @@
 
 # Shiira Browser <img src="GPL3.png" align="right" height="48" alt="GPLv3 Logo" />
 
-Shiira is an Electron-based desktop browser inspired by the classic Shiira browser for Mac OS X. It combines a dark custom interface with practical browser features such as tab management, bookmarks, history, ad blocking, session restore, password storage, and an assistant sidebar.
+Shiira is an Electron-based desktop browser inspired by the classic Shiira browser for Mac OS X. It combines a dark custom interface with practical browser features such as tab management, bookmarks, history, ad blocking, session restore, password storage, and an assistant sidebar. It is meant to function as a backup secondary browser.
 
 The project is a modern homage rather than a port. It does not depend on original Shiira source code; the design direction is based on public descriptions of the original browser and its interface ideas.
 
