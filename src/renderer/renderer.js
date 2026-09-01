@@ -108,15 +108,11 @@ class ShiiraBrowser {
     this.initTextContextMenu();
     this.initPermissionDialog();
     
-    await this.initAdBlocker();
-    await this.initFavorites();
+    // Start background tasks without blocking the first renderer paint.
+    void this.initAdBlocker().catch(err => console.error('[AdBlocker] Init failed:', err));
+    void this.initFavorites().catch(err => console.error('[Favorites] Init failed:', err));
     this.initPasswordManager();
-    
-    // Display app info
-    const appInfo = await window.shiiraAPI.getAppInfo();
-    console.log(`${appInfo.name} v${appInfo.version} by ${appInfo.company}`);
-    console.log(`Electron: ${appInfo.electronVersion}, Chrome: ${appInfo.chromeVersion}`);
-    
+
     // Listen for open-url message (when opening files/links with the browser)
     let urlOpened = false;
     window.shiiraAPI.onOpenUrl((url) => {
@@ -145,21 +141,41 @@ class ShiiraBrowser {
       this.showOAuthModal(url);
     });
     
-    // Try to restore previous session
-    const sessionRestored = await this.restoreSession();
-    
-    // Create initial Home tab only if no session restored and no URL opened
-    setTimeout(() => {
-      if (!urlOpened && !sessionRestored) {
+    // Defer slow startup work until after the first paint.
+    requestAnimationFrame(() => {
+      void this.loadStartupInfo();
+      if (!urlOpened) {
         this.createHomeTab();
       }
-    }, 50);
-    
+    });
+
+    // Restore session in the background without delaying the first UI paint.
+    void this.restoreSession().then((sessionRestored) => {
+      if (sessionRestored) {
+        return;
+      }
+      if (!urlOpened && this.tabs.length === 0) {
+        this.createHomeTab();
+      }
+    }).catch(err => {
+      console.error('[Session] Restore failed in background:', err);
+    });
+
     // Set up session save on window close
     this.setupSessionPersistence();
     
     this.updateStatus('Ready');
     console.log('[Shiira] Initialization complete');
+  }
+
+  async loadStartupInfo() {
+    try {
+      const appInfo = await window.shiiraAPI.getAppInfo();
+      console.log(`${appInfo.name} v${appInfo.version} by ${appInfo.company}`);
+      console.log(`Electron: ${appInfo.electronVersion}, Chrome: ${appInfo.chromeVersion}`);
+    } catch (error) {
+      console.error('[Renderer] Failed to load app info:', error);
+    }
   }
 
   /**

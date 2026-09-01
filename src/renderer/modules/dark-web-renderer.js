@@ -307,9 +307,9 @@ export const DarkWebRendererMixin = {
     }
 
     try {
-      if (this.isYouTubeUrl(url)) {
-        await webview.insertCSS(YOUTUBE_DARK_CSS);
-        await webview.executeJavaScript(YOUTUBE_DARK_SCRIPT, true);
+      // Do not force dark-mode or any player manipulation on YouTube or adult-video sites.
+      // Those pages rely on their own player runtime and DOM state; custom rewrites blank the player.
+      if (this.isYouTubeUrl(url) || this.isAdultVideoUrl(url)) {
         return;
       }
 
@@ -353,6 +353,24 @@ export const DarkWebRendererMixin = {
     try {
       const hostname = new URL(url).hostname.replace(/^www\./, '');
       return hostname === 'youtube.com' || hostname.endsWith('.youtube.com') || hostname === 'youtu.be';
+    } catch (e) {
+      return false;
+    }
+  },
+
+  isAdultVideoUrl(url) {
+    try {
+      const hostname = new URL(url).hostname.toLowerCase();
+      const normalized = hostname.replace(/^www\./, '');
+      return [
+        'pornhub.com',
+        'www.pornhub.com',
+        'xvideos.com',
+        'xnxx.com',
+        'redtube.com',
+        'youporn.com',
+        'tube8.com'
+      ].includes(normalized) || normalized.endsWith('.pornhub.com');
     } catch (e) {
       return false;
     }

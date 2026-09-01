@@ -111,6 +111,17 @@ export const UIPanelsMixin = {
       if (this.aboutVersion) {
         this.aboutVersion.textContent = `v${appInfo.version}`;
       }
+
+      if (this.updateStatusElement) {
+        this.updateStatusElement.innerHTML = '<span class="update-checking">Checking for updates...</span>';
+        this.updateStatusElement.className = 'about-update-status checking';
+      }
+
+      try {
+        await this.checkForUpdates();
+      } catch (error) {
+        console.warn('[Updates] Failed to auto-check from About panel:', error);
+      }
     }
   },
 

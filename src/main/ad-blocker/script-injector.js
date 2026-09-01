@@ -10,10 +10,11 @@ class ScriptInjector {
   constructor() {
     this.enabled = true;
     this.scriptsDir = null;
-    
+    this.experimentalSiteScriptsEnabled = process.env.SHIIRA_ENABLE_EXPERIMENTAL_SITE_SCRIPTS === '1';
+
     // Site-specific scripts Map<hostname pattern, script content>
     this.siteScripts = new Map();
-    
+
     // Stats
     this.stats = {
       injectionCount: 0,
@@ -46,11 +47,19 @@ class ScriptInjector {
    * Load built-in scripts (hardcoded for reliability)
    */
   loadBuiltInScripts() {
-    // YouTube ad blocking script
-    this.siteScripts.set('youtube.com', this.getYouTubeScript());
-    this.siteScripts.set('www.youtube.com', this.getYouTubeScript());
-    this.siteScripts.set('m.youtube.com', this.getYouTubeScript());
-    this.siteScripts.set('music.youtube.com', this.getYouTubeScript());
+    if (!this.experimentalSiteScriptsEnabled) {
+      console.log('[Script Injector] Experimental site scripts are disabled; defaulting to passive blocking only.');
+      return;
+    }
+
+    // Site-specific scripts are intentionally opt-in because they are highly browser- and site-sensitive.
+    // This avoids anti-adblock triggers and broken player behavior on sites like YouTube and Pornhub.
+    if (process.env.SHIIRA_ENABLE_YOUTUBE_ADBLOCK === '1') {
+      this.siteScripts.set('youtube.com', this.getYouTubeScript());
+      this.siteScripts.set('www.youtube.com', this.getYouTubeScript());
+      this.siteScripts.set('m.youtube.com', this.getYouTubeScript());
+      this.siteScripts.set('music.youtube.com', this.getYouTubeScript());
+    }
   }
 
   /**

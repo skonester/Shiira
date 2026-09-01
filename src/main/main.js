@@ -781,40 +781,79 @@ function createWindow() {
 
 // App lifecycle
 app.whenReady().then(async () => {
-  await detectHardwareAccelerationProfile();
-
   // Wait for Widevine CDM to be ready (Castlabs Electron for DRM support)
   // NOTE: Skipping components.whenReady() due to crash in Castlabs v39
   // The CDM will still be downloaded/updated automatically in the background
   if (components) {
     console.log('[Widevine] Components API available - CDM will update in background');
   }
-  
+
   // Set app icon for Windows taskbar/dock
   if (process.platform === 'win32') {
     const iconPath = getAssetPath('shiira-logo.ico');
     if (fs.existsSync(iconPath)) {
       const icon = nativeImage.createFromPath(iconPath);
-    app.setAppUserModelId('com.Shiira.shiira');
+      app.setAppUserModelId('com.Shiira.shiira');
       // Note: Electron doesn't support app.setIcon(), icon is set per-window
     }
   }
-  
+
   // Register custom protocol for assets
   protocol.registerFileProtocol('shiira-asset', (request, callback) => {
     const url = request.url.replace('shiira-asset://', '');
     const filePath = getAssetPath(url);
     callback({ path: filePath });
   });
-  
-  // Initialize services
+
+  // Show the window immediately so the app feels responsive.
+  // Heavy startup services run in the background afterwards.
+  createWindow();
+
+  // Start slow tasks without blocking the first window.
+  detectHardwareAccelerationProfile().catch((error) => {
+    console.warn('[Hardware] Capability detection failed:', error.message);
+  });
+
+  // Initialize services in the background; do not block first launch on keytar/DB setup.
   favoritesService.initialize();
-  await passwordService.initialize(); // Now async due to keytar
   bookmarksService.initialize();
   privacyService.initialize();
-  
-  createWindow();
-  
+  passwordService.initialize().catch((error) => {
+    console.error('[Password Service] Failed to initialize:', error.message);
+  });
+
+  // Initialize ad-blocker with bundled filter lists
+  const rulesDir = app.isPackaged
+    ? path.join(process.resourcesPath, 'filter-lists')
+    : path.join(__dirname, '../../filter-lists');
+
+  // Create filter-lists directory if it doesn't exist
+  if (!fs.existsSync(rulesDir)) {
+    fs.mkdirSync(rulesDir, { recursive: true });
+    console.log('[AdBlocker] Created filter-lists directory:', rulesDir);
+  }
+
+  // Initialize network request blocking with the default, non-aggressive ruleset.
+  adBlocker.init(rulesDir, { enabledRulesets: ['default'] }).catch(err => {
+    console.error('[AdBlocker] Initialization failed:', err);
+  });
+
+  // Initialize cosmetic filtering (element hiding)
+  try {
+    const cosmeticStats = cosmeticInjector.init(rulesDir);
+    console.log('[Cosmetic Injector] Ready with', cosmeticStats.genericCount, 'generic selectors');
+  } catch (err) {
+    console.error('[Cosmetic Injector] Initialization failed:', err);
+  }
+
+  // Initialize script injection (disabled by default to avoid anti-adblock and player breakage)
+  try {
+    const scriptStats = scriptInjector.init(rulesDir);
+    console.log('[Script Injector] Ready with', scriptStats.sitesCovered, 'site scripts (YouTube, etc.)');
+  } catch (err) {
+    console.error('[Script Injector] Initialization failed:', err);
+  }
+
   // Initialize auto-updater after window is created
   if (app.isPackaged) {
     autoUpdaterService.initialize(mainWindow);
@@ -1319,44 +1358,6 @@ ipcMain.handle('get-url-suggestions', async (event, query) => {
       console.error('[Suggestions] Error:', e);
     }
     return [];
-  }
-});
-
-// Load credentials on startup
-app.whenReady().then(() => {
-  favoritesService.initialize();
-  bookmarksService.initialize();
-  
-  // Initialize ad-blocker with bundled filter lists
-  const rulesDir = app.isPackaged
-    ? path.join(process.resourcesPath, 'filter-lists')
-    : path.join(__dirname, '../../filter-lists');
-  
-  // Create filter-lists directory if it doesn't exist
-  if (!fs.existsSync(rulesDir)) {
-    fs.mkdirSync(rulesDir, { recursive: true });
-    console.log('[AdBlocker] Created filter-lists directory:', rulesDir);
-  }
-  
-  // Initialize network request blocking (with YouTube-specific rules)
-  adBlocker.init(rulesDir, { enabledRulesets: ['default', 'youtube'] }).catch(err => {
-    console.error('[AdBlocker] Initialization failed:', err);
-  });
-  
-  // Initialize cosmetic filtering (element hiding)
-  try {
-    const cosmeticStats = cosmeticInjector.init(rulesDir);
-    console.log('[Cosmetic Injector] Ready with', cosmeticStats.genericCount, 'generic selectors');
-  } catch (err) {
-    console.error('[Cosmetic Injector] Initialization failed:', err);
-  }
-  
-  // Initialize script injection (YouTube ad skipping)
-  try {
-    const scriptStats = scriptInjector.init(rulesDir);
-    console.log('[Script Injector] Ready with', scriptStats.sitesCovered, 'site scripts (YouTube, etc.)');
-  } catch (err) {
-    console.error('[Script Injector] Initialization failed:', err);
   }
 });
 

@@ -21,10 +21,20 @@ The project is a modern homage rather than a port. It does not depend on origina
 - Bookmarks bar, favorites launcher, and Chrome bookmark import
 - Search from the home view with Google, DuckDuckGo, Brave, and Wikipedia
 - Native ad blocking with network and cosmetic filtering
+- Passive, compatibility-safe filtering for YouTube and video-heavy sites
 - Password manager with secure storage and CSV import
 - Cache, cookie, and site storage cleanup tools
 - Optional clear-on-exit cache behavior
-- Built-in update checks
+- Built-in update checks and in-app installer flow
+
+## Recent Changes (0.3.2)
+
+- Fixed the default YouTube playback breakage caused by aggressive site-specific script injection.
+- Removed the custom DOM/player hacks that were causing black screens and anti-adblock detection triggers.
+- Simplified startup so the browser opens quickly without waiting on slower background services.
+- Removed the duplicate startup window initialization that created the extra Electron window.
+- Bumped the app version and ensured the About panel can trigger a real app update check from the browser UI.
+- Updated the app update flow so the check-for-updates action in the About panel reports status and can download/install updates.
 
 ## Shiira-Inspired Features
 
