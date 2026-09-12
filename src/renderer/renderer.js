@@ -13,6 +13,8 @@ import { PasswordManagerMixin } from './password-anvil/password-manager.js';
 import { HistoryMixin } from './modules/history.js';
 import { FavoritesMixin } from './modules/favorites.js';
 import { AdBlockerMixin } from './modules/ad-blocker.js';
+import { ShieldMixin } from './modules/shield.js';
+import { VaultManagerMixin } from './modules/vault-manager.js';
 import { UrlSuggestionsMixin } from './modules/url-suggestions.js';
 import { WindowControlsMixin } from './modules/window-controls.js';
 import { KeyboardShortcutsMixin } from './modules/keyboard-shortcuts.js';
@@ -110,6 +112,7 @@ class ShiiraBrowser {
     
     // Start background tasks without blocking the first renderer paint.
     void this.initAdBlocker().catch(err => console.error('[AdBlocker] Init failed:', err));
+    void this.initShield().catch(err => console.error('[Shield] Init failed:', err));
     void this.initFavorites().catch(err => console.error('[Favorites] Init failed:', err));
     this.initPasswordManager();
 
@@ -445,7 +448,20 @@ class ShiiraBrowser {
     this.adblockStats = document.getElementById('adblock-stats');
     this.adblockEnabled = true;
     this.adblockBlockedCount = 0;
-    
+
+    // Shield (Encrypted DNS)
+    this.shieldToggle = document.getElementById('shield-toggle');
+    this.shieldStatus = document.getElementById('shield-status');
+    this.shieldEnabled = false;
+
+    // Vault (Safe Folder)
+    this.vaultPanel = document.getElementById('vault-panel');
+    this.vaultFileList = document.getElementById('vault-file-list');
+    this.vaultSearch = document.getElementById('vault-search');
+    this.btnCloseVault = document.getElementById('btn-close-vault');
+    this.btnAddVaultFile = document.getElementById('btn-add-vault-file');
+    this.vaultFileInput = document.getElementById('vault-file-input');
+
     // URL suggestions
     this.urlSuggestions = document.getElementById('url-suggestions');
   }
@@ -526,7 +542,7 @@ class ShiiraBrowser {
     }
     
     // Menu items
-    const toggleActions = ['favorites', 'adblock'];
+    const toggleActions = ['favorites', 'adblock', 'shield'];
     document.querySelectorAll('#main-menu .context-menu-item[data-action]').forEach(item => {
       item.addEventListener('click', () => {
         const action = item.dataset.action;
@@ -755,7 +771,35 @@ class ShiiraBrowser {
         this.toggleAdBlocker();
       });
     }
-    
+
+    // Shield toggle
+    if (this.shieldToggle) {
+      this.shieldToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleShield();
+      });
+    }
+
+    // Vault (Safe Folder) panel
+    if (this.btnCloseVault) this.btnCloseVault.addEventListener('click', () => this.hideVaultPanel());
+    if (this.btnAddVaultFile) this.btnAddVaultFile.addEventListener('click', () => this.vaultFileInput?.click());
+    if (this.vaultFileInput) {
+      this.vaultFileInput.addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (file) this.addVaultFile(file);
+        this.vaultFileInput.value = '';
+      });
+    }
+    if (this.vaultSearch) {
+      this.vaultSearch.addEventListener('input', () => {
+        const query = this.vaultSearch.value.trim().toLowerCase();
+        this.vaultFileList?.querySelectorAll('.vault-item').forEach((item) => {
+          const name = item.querySelector('.vault-item-name')?.textContent.toLowerCase() || '';
+          item.style.display = name.includes(query) ? '' : 'none';
+        });
+      });
+    }
+
     // Bookmark context menu item clicks
     if (this.bookmarkContextMenu) {
       this.bookmarkContextMenu.querySelectorAll('.context-menu-item').forEach(item => {
@@ -1018,6 +1062,8 @@ applyMixin(ShiiraBrowser, HistoryMixin);           // Browsing history
 applyMixin(ShiiraBrowser, FavoritesMixin);         // Favorites bar
 applyMixin(ShiiraBrowser, BookmarksMixin);         // Bookmarks bar
 applyMixin(ShiiraBrowser, AdBlockerMixin);         // Ad blocking
+applyMixin(ShiiraBrowser, ShieldMixin);            // Encrypted DNS (Shield)
+applyMixin(ShiiraBrowser, VaultManagerMixin);      // Safe Folder (encrypted vault)
 applyMixin(ShiiraBrowser, UrlSuggestionsMixin);    // URL autocomplete
 applyMixin(ShiiraBrowser, WindowControlsMixin);    // Window minimize/maximize/close
 applyMixin(ShiiraBrowser, KeyboardShortcutsMixin); // Keyboard shortcuts

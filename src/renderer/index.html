@@ -451,6 +451,10 @@
         <img class="menu-icon" src="../../assets/ui-icons/shield.svg" width="16" height="16" alt="">
         Password Anvil
       </div>
+      <div class="context-menu-item" data-action="vault">
+        <img class="menu-icon" src="../../assets/ui-icons/lock.svg" width="16" height="16" alt="">
+        Safe Folder
+      </div>
       <div class="context-menu-item has-toggle" data-action="favorites">
         <img class="menu-icon" src="../../assets/ui-icons/heart.svg" width="16" height="16" alt="">
         Favorites
@@ -466,6 +470,12 @@
         Ad Blocker
         <span class="adblock-stats" id="adblock-stats"></span>
         <span class="menu-toggle" id="adblock-toggle"></span>
+      </div>
+      <div class="context-menu-item has-toggle" data-action="shield">
+        <img class="menu-icon" src="../../assets/ui-icons/shield.svg" width="16" height="16" alt="">
+        Shield (Encrypted DNS)
+        <span class="shield-status" id="shield-status"></span>
+        <span class="menu-toggle" id="shield-toggle"></span>
       </div>
       <div class="context-menu-item" data-action="themes">
         <img class="menu-icon" src="../../assets/ui-icons/customize.svg" width="16" height="16" alt="">
@@ -549,6 +559,33 @@
         <!-- Password items will be dynamically added here -->
       </div>
     </div>
+
+    <!--
+      Safe Folder (Encrypted Vault) Panel
+      Adapted from Silver Browser (github.com/nichin-labs/silver) by Hitroo Labs — Apache License 2.0.
+      See THIRD_PARTY_NOTICES/silver-browser-APACHE-2.0.txt. Ghost AI agent not included.
+    -->
+    <div id="vault-panel" class="panel hidden">
+      <div class="panel-header">
+        <h2>Safe Folder</h2>
+        <button id="btn-close-vault" class="panel-close-btn" title="Close">
+          <svg width="14" height="14" viewBox="0 0 14 14">
+            <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+        </button>
+      </div>
+      <div class="panel-toolbar">
+        <input type="text" id="vault-search" placeholder="Search files...">
+        <button id="btn-add-vault-file" class="panel-btn panel-btn-icon" title="Add file">
+          <img src="shiira-asset://ui-icons/plus.svg" alt="Add file">
+        </button>
+      </div>
+      <div id="vault-file-list" class="panel-list">
+        <!-- Vault files will be dynamically added here -->
+      </div>
+    </div>
+
+    <input type="file" id="vault-file-input" style="display: none;">
 
     <!-- Password Add/Edit Modal -->
     <div id="password-modal" class="modal-overlay hidden">

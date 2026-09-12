@@ -34,8 +34,8 @@ export const UIPanelsMixin = {
   },
 
   handleMainMenuAction(action) {
-    const panelActions = ['history', 'password-anvil', 'themes', 'import-chrome', 'about', 'shiira-palettes', 'tab-expose', 'private-tab'];
-    const toggleActions = ['favorites', 'adblock', 'bookmarks-bar']; // Actions that don't close the menu
+    const panelActions = ['history', 'password-anvil', 'vault', 'themes', 'import-chrome', 'about', 'shiira-palettes', 'tab-expose', 'private-tab'];
+    const toggleActions = ['favorites', 'adblock', 'shield', 'bookmarks-bar']; // Actions that don't close the menu
     const isOpeningPanel = panelActions.includes(action);
     const isToggleAction = toggleActions.includes(action);
     
@@ -57,6 +57,10 @@ export const UIPanelsMixin = {
       case 'password-anvil':
         this.hideMainMenu(true); // Instant hide
         this.showPasswordAnvil();
+        break;
+      case 'vault':
+        this.hideMainMenu(true); // Instant hide
+        this.showVault();
         break;
       case 'themes':
         this.hideMainMenu(true); // Instant hide
@@ -84,6 +88,9 @@ export const UIPanelsMixin = {
         break;
       case 'adblock':
         this.toggleAdBlocker();
+        break;
+      case 'shield':
+        this.toggleShield();
         break;
     }
   },
@@ -226,6 +233,7 @@ export const UIPanelsMixin = {
     this.hideFavoritesDialog();
     this.hidePasswordAnvilPanel();
     this.hidePasswordModal();
+    this.hideVaultPanel?.();
     this.hideChromeImportPanel();
     this.hideSuggestions();
     this.hideShiiraDrawer?.();

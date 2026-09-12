@@ -72,7 +72,25 @@ contextBridge.exposeInMainWorld('shiiraAPI', {
     setSetting: (key, value) => ipcRenderer.invoke('privacy-set-setting', key, value),
     clearBrowsingData: (kind) => ipcRenderer.invoke('privacy-clear-browsing-data', kind)
   },
-  
+
+  // Shield (Encrypted DNS)
+  shield: {
+    getStatus: () => ipcRenderer.invoke('shield-get-status'),
+    setEnabled: (enabled) => ipcRenderer.invoke('shield-set-enabled', enabled)
+  },
+
+  // Vault (Safe Folder)
+  vault: {
+    hasPin: () => ipcRenderer.invoke('vault-has-pin'),
+    setupPin: (pin) => ipcRenderer.invoke('vault-setup-pin', pin),
+    verifyPin: (pin) => ipcRenderer.invoke('vault-verify-pin', pin),
+    tryBiometric: (reason) => ipcRenderer.invoke('vault-try-biometric', reason),
+    safeList: () => ipcRenderer.invoke('vault-safe-list'),
+    safeAdd: (name, base64Data, mimeType) => ipcRenderer.invoke('vault-safe-add', name, base64Data, mimeType),
+    safeGet: (id) => ipcRenderer.invoke('vault-safe-get', id),
+    safeRemove: (id) => ipcRenderer.invoke('vault-safe-remove', id)
+  },
+
   // Favorites
   favorites: {
     get: () => ipcRenderer.invoke('favorites-get'),

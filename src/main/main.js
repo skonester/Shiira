@@ -30,6 +30,8 @@ const FavoritesService = require('./favorites-service');
 const PasswordService = require('./password-service');
 const BookmarksService = require('./bookmarks-service');
 const PrivacyService = require('./privacy-service');
+const DnsShield = require('./dns-shield');
+const VaultService = require('./vault-service');
 const { getAdBlocker, getCosmeticInjector, getScriptInjector } = require('./ad-blocker');
 
 // Initialize Chrome Importer
@@ -46,6 +48,12 @@ const bookmarksService = new BookmarksService();
 
 // Initialize Privacy Service
 const privacyService = new PrivacyService();
+
+// Initialize Shield (encrypted DNS / DNS-over-HTTPS)
+const dnsShield = new DnsShield();
+
+// Vault (Safe Folder) is created once PasswordService's encryption key is ready - see app.whenReady()
+let vaultService = null;
 
 // Initialize Ad Blocker (network blocking)
 const adBlocker = getAdBlocker();
@@ -137,12 +145,16 @@ function installBrowserHeaderOverrides(sessionInstance) {
   sessionInstance.webRequest.onBeforeSendHeaders(
     { urls: ['http://*/*', 'https://*/*'] },
     (details, callback) => {
-      callback({
-        requestHeaders: {
-          ...details.requestHeaders,
-          ...browserHeaders
-        }
-      });
+      let requestHeaders = {
+        ...details.requestHeaders,
+        ...browserHeaders
+      };
+
+      if (dnsShield.isEnabled()) {
+        requestHeaders = dnsShield.getPrivacyHeaders(details, requestHeaders);
+      }
+
+      callback({ requestHeaders });
     }
   );
 }
@@ -818,7 +830,16 @@ app.whenReady().then(async () => {
   favoritesService.initialize();
   bookmarksService.initialize();
   privacyService.initialize();
-  passwordService.initialize().catch((error) => {
+
+  // Restore the Shield (encrypted DNS) toggle from the last session.
+  if (privacyService.getSettings().shieldEnabled) {
+    dnsShield.enable();
+  }
+
+  passwordService.initialize().then(() => {
+    // Vault (Safe Folder) reuses the same OS-keychain-backed key as the password manager.
+    vaultService = new VaultService(passwordService.encryptionKey, app.getPath('userData'));
+  }).catch((error) => {
     console.error('[Password Service] Failed to initialize:', error.message);
   });
 
@@ -1158,6 +1179,21 @@ ipcMain.handle('privacy-clear-site-permissions', (event, hostname) => {
   return privacyService.clearSitePermissions(hostname);
 });
 
+// Shield (Encrypted DNS) IPC Handlers
+ipcMain.handle('shield-get-status', () => {
+  return dnsShield.getStatus();
+});
+
+ipcMain.handle('shield-set-enabled', (event, enabled) => {
+  if (enabled) {
+    dnsShield.enable();
+  } else {
+    dnsShield.disable();
+  }
+  privacyService.setSetting('shieldEnabled', enabled);
+  return { success: true, enabled: dnsShield.isEnabled() };
+});
+
 ipcMain.handle('download-url', (event, url, options = {}) => {
   if (!url) {
     return { success: false, error: 'No URL provided' };
@@ -1433,6 +1469,48 @@ ipcMain.handle('passwords-delete-all', async () => {
     
     return { success: false, error: err.message };
   }
+});
+
+// Vault (Safe Folder) IPC Handlers
+ipcMain.handle('vault-has-pin', () => {
+  return vaultService ? vaultService.hasPIN() : false;
+});
+
+ipcMain.handle('vault-setup-pin', (event, pin) => {
+  if (!vaultService) return { success: false, error: 'Vault not ready' };
+  vaultService.setupPIN(pin);
+  return { success: true };
+});
+
+ipcMain.handle('vault-verify-pin', (event, pin) => {
+  return vaultService ? vaultService.verifyPIN(pin) : false;
+});
+
+ipcMain.handle('vault-try-biometric', (event, reason) => {
+  return vaultService ? vaultService.tryBiometric(reason) : Promise.resolve(false);
+});
+
+ipcMain.handle('vault-safe-list', () => {
+  return vaultService ? vaultService.list() : [];
+});
+
+ipcMain.handle('vault-safe-add', (event, name, base64Data, mimeType) => {
+  if (!vaultService) return { success: false, error: 'Vault not ready' };
+  const data = Buffer.from(base64Data, 'base64');
+  return vaultService.addFile(name, data, mimeType);
+});
+
+ipcMain.handle('vault-safe-get', (event, id) => {
+  if (!vaultService) return null;
+  const result = vaultService.getFile(id);
+  if (!result) return null;
+  return { file: result.file, data: result.data.toString('base64') };
+});
+
+ipcMain.handle('vault-safe-remove', (event, id) => {
+  if (!vaultService) return { success: false, error: 'Vault not ready' };
+  vaultService.removeFile(id);
+  return { success: true };
 });
 
 ipcMain.handle('create-password-anvil-window', () => {

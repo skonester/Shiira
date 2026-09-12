@@ -12,7 +12,8 @@ class PrivacyService {
         this.settings = {
             enableUrlSuggestions: true, // Default: enabled for convenience
             suggestionsProvider: 'startpage', // 'startpage' or 'none'
-            sitePermissions: {} // { hostname: { media: true/false, geolocation: true/false } }
+            sitePermissions: {}, // { hostname: { media: true/false, geolocation: true/false } }
+            shieldEnabled: false // Encrypted DNS (DNS-over-HTTPS) toggle
         };
     }
 

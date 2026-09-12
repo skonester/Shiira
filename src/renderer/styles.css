@@ -2941,6 +2941,118 @@ webview.active {
   color: var(--text-tertiary);
 }
 
+/* Safe Folder (Vault) list items - mirrors .password-item styling */
+.vault-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  gap: 10px;
+  cursor: pointer;
+  transition: background 0.1s;
+  height: 36px;
+  box-sizing: border-box;
+}
+
+.vault-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.vault-item-icon {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  max-width: 16px;
+  flex-shrink: 0;
+  filter: var(--icon-filter-secondary);
+}
+
+.vault-item-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.vault-item-name {
+  font-size: 13px;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+  font-weight: 500;
+}
+
+.vault-item-size {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.vault-item-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.vault-item:hover .vault-item-actions {
+  opacity: 1;
+}
+
+.vault-action-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.vault-action-btn img {
+  width: 14px;
+  height: 14px;
+  filter: var(--icon-filter-secondary);
+}
+
+.vault-action-btn:hover {
+  background: var(--bg-secondary);
+}
+
+.vault-action-btn:hover img {
+  filter: var(--icon-filter-accent);
+}
+
+.vault-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.vault-empty-text {
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.vault-empty-subtext {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
 /* Modal Dialog */
 .modal-overlay {
   position: fixed;
@@ -4076,6 +4188,25 @@ webview.active {
 }
 
 .adblock-stats:empty {
+  display: none;
+}
+
+/* Shield (Encrypted DNS) status badge */
+.shield-status {
+  position: absolute;
+  right: 56px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 30px;
+  text-align: center;
+}
+
+.shield-status:empty {
   display: none;
 }
 

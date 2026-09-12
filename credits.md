@@ -43,6 +43,14 @@ SOFTWARE.
 
 ---
 
+## Silver Browser Attribution (Apache License 2.0)
+
+Shiira's **Shield** (encrypted DNS / DNS-over-HTTPS) feature and the **Safe Folder** and PIN/Touch ID unlock gate of the **Vault** are adapted from [Silver Browser](https://github.com/nichin-labs/silver) by **Hitroo Labs**, released under the Apache License 2.0. The adapted code was reworked to fit Shiira's existing architecture (plain JS/CommonJS instead of TypeScript, Shiira's own OS-keychain-backed encryption key instead of Silver's machine-fingerprint key, Shiira's own UI panel/menu conventions). Silver Browser's "Ghost" AI agent and everything that supports it were **not** used anywhere in Shiira.
+
+A verbatim copy of the Apache License 2.0 is included at [`THIRD_PARTY_NOTICES/silver-browser-APACHE-2.0.txt`](THIRD_PARTY_NOTICES/silver-browser-APACHE-2.0.txt), as required by the license.
+
+---
+
 ## Historical Roots: The Original Shiira Browser
 
 This modern project stands as a dedicated homage to the classic, open-source **Shiira** browser, which was originally developed for Apple's Mac OS X.
