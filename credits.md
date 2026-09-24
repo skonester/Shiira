@@ -51,6 +51,12 @@ A verbatim copy of the Apache License 2.0 is included at [`THIRD_PARTY_NOTICES/s
 
 ---
 
+## Zenium Attribution (Apache License 2.0)
+
+Shiira's first-run setup, settings layout, and custom color wheel were adapted from the corresponding Zenium browser features by Bennett Buhner. The implementation was rewritten for Shiira's plain JavaScript renderer and existing browser preferences. Zenium is licensed under the Apache License 2.0; its license and copyright notice are included at [`THIRD_PARTY_NOTICES/zenium-APACHE-2.0.txt`](THIRD_PARTY_NOTICES/zenium-APACHE-2.0.txt).
+
+---
+
 ## Historical Roots: The Original Shiira Browser
 
 This modern project stands as a dedicated homage to the classic, open-source **Shiira** browser, which was originally developed for Apple's Mac OS X.

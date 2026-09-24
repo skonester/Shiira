@@ -481,6 +481,10 @@
         <img class="menu-icon" src="../../assets/ui-icons/customize.svg" width="16" height="16" alt="">
         Themes
       </div>
+      <div class="context-menu-item" data-action="settings">
+        <img class="menu-icon" src="../../assets/ui-icons/customize.svg" width="16" height="16" alt="">
+        Settings
+      </div>
       <div class="context-menu-item" data-action="shiira-palettes">
         <img class="menu-icon" src="../../assets/ui-icons/bookmark.svg" width="16" height="16" alt="">
         Shiira Palettes
@@ -515,7 +519,7 @@
           <img src="shiira-asset://shiira.png" alt="Shiira Logo" width="80" height="80">
         </div>
         <div class="about-title">Shiira Browser</div>
-        <div class="about-version" id="about-version">Version 0.3.1</div>
+        <div class="about-version" id="about-version">Version …</div>
         <div class="about-description">
           Shiira is a dark, small-surface browser project for private browsing,
           saved places, and fewer distractions.
@@ -832,6 +836,223 @@
               </div>
             </div>
           </div>
+          <section class="custom-theme-section" aria-label="Custom theme">
+            <h4>Custom color theme</h4>
+            <p>Drag a dot to pick a color. Click the wheel to add up to three colors.</p>
+            <div class="custom-theme-layout">
+              <div id="theme-color-wheel" class="theme-color-wheel" aria-label="Color wheel"></div>
+              <div class="custom-theme-controls">
+                <div id="custom-theme-preview" class="custom-theme-preview"></div>
+                <label for="theme-algorithm">Color harmony</label>
+                <select id="theme-algorithm">
+                  <option value="floating">Free colors</option>
+                  <option value="complementary">Complementary</option>
+                  <option value="analogous">Analogous</option>
+                  <option value="splitComplementary">Split complementary</option>
+                  <option value="triadic">Triadic</option>
+                </select>
+                <label class="theme-monochrome-label"><input id="theme-monochrome" type="checkbox"> Monochromatic</label>
+                <div class="custom-theme-buttons">
+                  <button id="theme-add-color" type="button">Add color</button>
+                  <button id="theme-remove-color" type="button">Remove color</button>
+                </div>
+              </div>
+            </div>
+            <label class="theme-range-label" for="theme-opacity">Color strength <span id="theme-opacity-value">60%</span></label>
+            <input id="theme-opacity" type="range" min="15" max="100" value="60">
+            <label class="theme-range-label" for="theme-texture">Texture <span id="theme-texture-value">0%</span></label>
+            <input id="theme-texture" type="range" min="0" max="100" value="0">
+            <label class="theme-range-label" for="theme-rotation">Gradient angle <span id="theme-rotation-value">135°</span></label>
+            <input id="theme-rotation" type="range" min="0" max="360" value="135">
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div id="settings-modal" class="shiira-modal hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="shiira-modal-content settings-dialog">
+        <div class="shiira-modal-header settings-header">
+          <h3 id="settings-title">Settings</h3>
+          <button id="btn-close-settings" class="panel-close-btn" title="Close settings" aria-label="Close settings">×</button>
+        </div>
+        <div class="settings-search-wrap">
+          <input id="settings-find" type="search" placeholder="Find in Settings" aria-label="Find in Settings">
+        </div>
+        <div class="settings-layout">
+          <nav class="settings-nav" aria-label="Settings sections">
+            <button type="button" data-settings-section="general" class="active">General</button>
+            <button type="button" data-settings-section="appearance">Look and Feel</button>
+            <button type="button" data-settings-section="startup">Tab Management</button>
+            <button type="button" data-settings-section="search">Search</button>
+            <button type="button" data-settings-section="downloads">Downloads</button>
+            <button type="button" data-settings-section="privacy">Privacy and Security</button>
+            <button type="button" data-settings-section="permissions">Site Permissions</button>
+            <button type="button" data-settings-section="passwords">Passwords</button>
+            <button type="button" data-settings-section="updates">Updates</button>
+            <button type="button" data-settings-section="about">About</button>
+          </nav>
+          <div class="settings-pages">
+            <p id="settings-search-empty" class="hidden" role="status">No settings found.</p>
+            <section class="settings-page" data-settings-page="general">
+              <h4>General</h4>
+              <div class="settings-group">
+                <h5>Home button</h5>
+                <p>Use Shiira's home page, or send the Home button to a website.</p>
+                <label for="settings-homepage">Custom home page</label>
+                <div class="settings-inline"><input id="settings-homepage" type="url" placeholder="https://example.com"><button id="settings-save-homepage" type="button" class="settings-action">Save</button></div>
+                <button id="settings-reset-homepage" type="button" class="settings-action">Use Shiira home page</button>
+                <p id="settings-homepage-status" role="status"></p>
+              </div>
+              <div class="settings-group">
+                <h5>Welcome</h5>
+                <button id="settings-replay-welcome" type="button" class="settings-action">Show welcome setup again</button>
+              </div>
+            </section>
+            <section class="settings-page hidden" data-settings-page="appearance">
+              <h4>Look and Feel</h4>
+              <div class="settings-group">
+                <h5>Browser look</h5>
+                <p>Choose a preset or make a custom gradient with the color wheel.</p>
+                <button id="settings-open-themes" type="button" class="settings-action">Choose theme</button>
+              </div>
+              <div class="settings-group">
+                <h5>Page display</h5>
+                <label for="settings-brightness">Page brightness <span id="settings-brightness-value">100%</span></label>
+                <input id="settings-brightness" type="range" min="20" max="100" value="100">
+                <label class="settings-check"><input id="settings-force-dark" type="checkbox"> Force dark appearance on supported pages</label>
+                <p>Changing this reloads the current page. Video sites keep their own appearance.</p>
+              </div>
+              <div class="settings-group">
+                <h5>Toolbar</h5>
+                <label class="settings-check"><input id="settings-bookmarks-bar" type="checkbox"> Show bookmarks bar</label>
+                <label class="settings-check"><input id="settings-favorites" type="checkbox"> Show Favorites launcher</label>
+              </div>
+            </section>
+            <section class="settings-page hidden" data-settings-page="startup">
+              <h4>Tab Management &amp; Startup</h4>
+              <div class="settings-group">
+                <h5>On startup</h5>
+                <label class="settings-check"><input id="settings-restore-session" type="checkbox"> Continue where you left off</label>
+                <p>Restore open tabs from the previous session. Turn this off to start on Shiira's home page.</p>
+              </div>
+              <div class="settings-group">
+                <h5>Browsing</h5>
+                <p>New tabs open on Shiira's home page. Use the History panel to revisit pages and Tab Expose to see all open tabs.</p>
+                <div class="settings-inline"><button id="settings-open-history" type="button" class="settings-action">Open history</button><button id="settings-open-tab-expose" type="button" class="settings-action">Tab Expose</button></div>
+              </div>
+            </section>
+            <section class="settings-page hidden" data-settings-page="search">
+              <h4>Search</h4>
+              <div class="settings-group">
+                <h5>Default search engine</h5>
+                <label for="settings-search-engine">Search from the address bar and new tab page</label>
+                <select id="settings-search-engine">
+                  <option value="brave">Brave</option>
+                  <option value="startpage">Startpage</option>
+                  <option value="scira">Scira AI</option>
+                </select>
+              </div>
+              <div class="settings-group">
+                <h5>Suggestions</h5>
+                <label class="settings-check"><input id="settings-url-suggestions" type="checkbox"> Show online suggestions while typing</label>
+                <p>Suggestions are requested from Startpage as you type in the address bar.</p>
+              </div>
+            </section>
+            <section class="settings-page hidden" data-settings-page="downloads">
+              <h4>Downloads</h4>
+              <div class="settings-group">
+                <h5>Saving files</h5>
+                <p id="settings-download-directory">Loading download folder…</p>
+                <div class="settings-inline"><button id="settings-change-download-folder" type="button" class="settings-action">Change folder</button><button id="settings-reset-download-folder" type="button" class="settings-action">Use default</button><button id="settings-open-download-folder" type="button" class="settings-action">Open folder</button></div>
+                <label class="settings-check"><input id="settings-ask-download" type="checkbox"> Ask where to save each file</label>
+                <p>When this is off, downloads use the folder above. “Save As” actions still ask for a name.</p>
+                <p id="settings-download-status" role="status"></p>
+              </div>
+            </section>
+            <section class="settings-page hidden" data-settings-page="privacy">
+              <h4>Privacy and Security</h4>
+              <div class="settings-group">
+                <h5>Protection</h5>
+                <label class="settings-check"><input id="settings-adblock" type="checkbox"> Ad Blocker</label>
+                <label class="settings-check"><input id="settings-shield" type="checkbox"> Shield (encrypted DNS)</label>
+              </div>
+              <div class="settings-group">
+                <h5>Browsing data</h5>
+                <label class="settings-check"><input id="settings-clear-on-exit" type="checkbox"> Clear cookies and cache on exit</label>
+                <label for="settings-clear-kind">Clear now</label>
+                <div class="settings-inline"><select id="settings-clear-kind"><option value="cache">Cached files</option><option value="cookies">Cookies</option><option value="cookies-and-cache">Cookies and cache</option><option value="storage">Site storage</option></select><button id="settings-clear-data" type="button" class="settings-action">Clear data…</button></div>
+                <button id="settings-clear-history" type="button" class="settings-action">Clear browsing history…</button>
+                <p id="settings-privacy-status" role="status"></p>
+              </div>
+            </section>
+            <section class="settings-page hidden" data-settings-page="permissions">
+              <h4>Site Permissions</h4>
+              <p>Permissions you chose to remember for websites.</p>
+              <div id="settings-permission-list" class="settings-permission-list"></div>
+              <button id="settings-clear-permissions" type="button" class="settings-action">Forget all site permissions…</button>
+              <p id="settings-permission-status" role="status"></p>
+            </section>
+            <section class="settings-page hidden" data-settings-page="passwords">
+              <h4>Passwords</h4>
+              <div class="settings-group">
+                <h5>Password Anvil</h5>
+                <p>View, add, and import saved passwords.</p>
+                <button id="settings-open-passwords" type="button" class="settings-action">Open Password Anvil</button>
+              </div>
+              <div class="settings-group">
+                <h5>Safe Folder</h5>
+                <p>Open your encrypted private files.</p>
+                <button id="settings-open-vault" type="button" class="settings-action">Open Safe Folder</button>
+              </div>
+            </section>
+            <section class="settings-page hidden" data-settings-page="updates">
+              <h4>Updates</h4>
+              <label class="settings-check"><input id="settings-auto-updates" type="checkbox"> Check for updates when Shiira starts</label>
+              <p>Updates are downloaded and installed only when you choose to proceed.</p>
+              <p id="settings-update-status" role="status">Checking update status…</p>
+              <div class="settings-inline"><button id="settings-check-updates" type="button" class="settings-action">Check now</button><button id="settings-download-update" type="button" class="settings-action hidden">Download update</button><button id="settings-install-update" type="button" class="settings-action hidden">Restart &amp; install</button></div>
+            </section>
+            <section class="settings-page hidden" data-settings-page="about">
+              <h4>About Shiira</h4>
+              <p>Browser version <span id="settings-version">…</span></p>
+              <p>Shiira is an Electron browser inspired by the original Shiira project.</p>
+              <button id="settings-open-about" type="button" class="settings-action">Open About panel</button>
+              <h5>Keyboard shortcuts</h5>
+              <div class="settings-shortcuts"><span>New tab <kbd>Ctrl+T</kbd></span><span>Address bar <kbd>Ctrl+L</kbd></span><span>Settings <kbd>Ctrl+,</kbd></span><span>History <kbd>Ctrl+H</kbd></span><span>Tab Expose <kbd>Ctrl+Shift+E</kbd></span></div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- First-run welcome -->
+    <div id="setup-overlay" class="setup-overlay hidden" role="dialog" aria-modal="true" aria-label="Welcome setup">
+      <div class="setup-card">
+        <div class="setup-progress" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+        <div class="setup-step" data-setup-step="0">
+          <img src="shiira-asset://shiira.png" alt="" class="setup-logo">
+          <h1 id="setup-heading">Welcome to Shiira</h1>
+          <p>A quieter place to browse. Choose your look and search engine, then make Shiira yours.</p>
+        </div>
+        <div class="setup-step hidden" data-setup-step="1">
+          <h1>Choose your look</h1>
+          <p>Pick a starting theme. You can create your own with the color wheel later.</p>
+          <div id="setup-themes" class="setup-theme-grid"></div>
+        </div>
+        <div class="setup-step hidden" data-setup-step="2">
+          <h1>Choose your search engine</h1>
+          <p>Search from the address bar or Shiira's home page.</p>
+          <div id="setup-search-engines" class="setup-search-grid"></div>
+        </div>
+        <div class="setup-step hidden" data-setup-step="3">
+          <h1>Ready to browse</h1>
+          <p>Open Settings from the menu whenever you want to change your theme, search engine, or privacy controls.</p>
+          <div class="setup-shortcuts"><span>New tab <kbd>Ctrl+T</kbd></span><span>Address bar <kbd>Ctrl+L</kbd></span></div>
+        </div>
+        <div class="setup-footer">
+          <button id="setup-back" type="button" class="setup-secondary" disabled>Back</button>
+          <div><button id="setup-skip" type="button" class="setup-secondary">Skip setup</button><button id="setup-next" type="button" class="setup-primary">Continue</button></div>
         </div>
       </div>
     </div>

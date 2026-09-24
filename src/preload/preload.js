@@ -70,7 +70,15 @@ contextBridge.exposeInMainWorld('shiiraAPI', {
   privacy: {
     getSettings: () => ipcRenderer.invoke('privacy-get-settings'),
     setSetting: (key, value) => ipcRenderer.invoke('privacy-set-setting', key, value),
-    clearBrowsingData: (kind) => ipcRenderer.invoke('privacy-clear-browsing-data', kind)
+    clearBrowsingData: (kind) => ipcRenderer.invoke('privacy-clear-browsing-data', kind),
+    clearSitePermissions: (hostname) => ipcRenderer.invoke('privacy-clear-site-permissions', hostname)
+  },
+  browserSettings: {
+    get: () => ipcRenderer.invoke('browser-settings-get'),
+    set: (key, value) => ipcRenderer.invoke('browser-settings-set', key, value),
+    chooseDownloadDirectory: () => ipcRenderer.invoke('downloads-choose-directory'),
+    resetDownloadDirectory: () => ipcRenderer.invoke('downloads-reset-directory'),
+    openDownloadDirectory: () => ipcRenderer.invoke('downloads-open-directory')
   },
 
   // Shield (Encrypted DNS)

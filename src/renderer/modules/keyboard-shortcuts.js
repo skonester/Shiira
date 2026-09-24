@@ -50,6 +50,9 @@ export const KeyboardShortcutsMixin = {
       case 'show-history':
         this.showHistoryPanel();
         break;
+      case 'show-settings':
+        this.showSettings();
+        break;
       case 'toggle-bookmarks-bar':
         this.toggleBookmarksBar();
         break;
@@ -67,6 +70,18 @@ export const KeyboardShortcutsMixin = {
       // Skip shortcuts when typing in input fields (except for specific combos)
       const isInputFocused = document.activeElement?.tagName === 'INPUT' || 
                              document.activeElement?.tagName === 'TEXTAREA';
+
+      if (e.ctrlKey && !e.shiftKey && e.key === ',') {
+        e.preventDefault();
+        this.showSettings();
+        return;
+      }
+      if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'f' &&
+          this.settingsModal && !this.settingsModal.classList.contains('hidden')) {
+        e.preventDefault();
+        document.getElementById('settings-find')?.focus();
+        return;
+      }
       
       // Ctrl+T: New tab
       if (e.ctrlKey && !e.shiftKey && e.key === 't') {

@@ -302,6 +302,7 @@ export const DarkWebRendererMixin = {
   },
 
   async injectForcedDarkMode(webview, url) {
+    if (localStorage.getItem('shiira-force-dark-pages') === 'false') return;
     if (!webview || !url || isInternalUrl(url) || url === 'about:blank') {
       return;
     }

@@ -30,6 +30,7 @@ const FavoritesService = require('./favorites-service');
 const PasswordService = require('./password-service');
 const BookmarksService = require('./bookmarks-service');
 const PrivacyService = require('./privacy-service');
+const BrowserSettings = require('./browser-settings');
 const DnsShield = require('./dns-shield');
 const VaultService = require('./vault-service');
 const { getAdBlocker, getCosmeticInjector, getScriptInjector } = require('./ad-blocker');
@@ -48,6 +49,7 @@ const bookmarksService = new BookmarksService();
 
 // Initialize Privacy Service
 const privacyService = new PrivacyService();
+const browserSettings = new BrowserSettings();
 
 // Initialize Shield (encrypted DNS / DNS-over-HTTPS)
 const dnsShield = new DnsShield();
@@ -67,6 +69,7 @@ const scriptInjector = getScriptInjector();
 let darkReaderScriptCache = null;
 const suggestionCache = new LRUCache({ max: 256, ttl: 1000 * 60 * 10 });
 const pendingDownloads = new WeakMap();
+const activeDownloadPaths = new Set();
 const browserHeaderSessions = new WeakSet();
 let hardwareAccelerationProfile = {
   avx2: false,
@@ -374,6 +377,7 @@ function handleKeyboardShortcut(event, input, targetWindow) {
   else if (alt && !ctrl && key === 'arrowleft') shortcut = 'go-back';
   else if (alt && !ctrl && key === 'arrowright') shortcut = 'go-forward';
   else if (ctrl && !shift && key === 'h') shortcut = 'show-history';
+  else if (ctrl && !shift && key === ',') shortcut = 'show-settings';
   else if (ctrl && shift && key === 'b') shortcut = 'toggle-bookmarks-bar';
   else if (ctrl && shift && key === 'e') shortcut = 'tab-expose';
   else if (key === 'escape') shortcut = 'close-popups';
@@ -418,6 +422,14 @@ function routeWindowOpen(contents, details = {}) {
   return { action: 'deny' };
 }
 
+function downloadFolder() {
+  const chosen = browserSettings.get().downloadDirectory;
+  try {
+    if (chosen && fs.statSync(chosen).isDirectory()) return chosen;
+  } catch {}
+  return app.getPath('downloads');
+}
+
 function installDownloadPrompt(sessionInstance) {
   if (pendingDownloads.has(sessionInstance)) return;
 
@@ -429,25 +441,40 @@ function installDownloadPrompt(sessionInstance) {
     const metadata = pendingUrls.get(url) || {};
     pendingUrls.delete(url);
 
-    if (metadata.prompt !== false) {
-      item.pause();
+    const folder = downloadFolder();
+    const defaultPath = path.join(folder, path.basename(item.getFilename()));
+    const shouldPrompt = metadata.prompt === true ||
+      (metadata.prompt !== false && browserSettings.get().askWhereToSave);
 
-      const ownerWindow = metadata.windowId
-        ? BrowserWindow.fromId(metadata.windowId)
-        : BrowserWindow.getFocusedWindow();
+    try {
+      if (shouldPrompt) {
+        item.pause();
 
-      const result = await dialog.showSaveDialog(ownerWindow || undefined, {
-        title: metadata.title || 'Save File',
-        defaultPath: item.getFilename()
-      });
+        const ownerWindow = metadata.windowId
+          ? BrowserWindow.fromId(metadata.windowId)
+          : BrowserWindow.getFocusedWindow();
 
-      if (result.canceled || !result.filePath) {
-        item.cancel();
-        return;
+        const result = await dialog.showSaveDialog(ownerWindow || undefined, {
+          title: metadata.title || 'Save File',
+          defaultPath
+        });
+
+        if (result.canceled || !result.filePath) {
+          item.cancel();
+          return;
+        }
+
+        item.setSavePath(result.filePath);
+        item.resume();
+      } else {
+        const candidate = BrowserSettings.nextAvailablePath(folder, item.getFilename(), activeDownloadPaths);
+        item.setSavePath(candidate);
+        activeDownloadPaths.add(candidate);
+        item.once('done', () => activeDownloadPaths.delete(candidate));
       }
-
-      item.setSavePath(result.filePath);
-      item.resume();
+    } catch (error) {
+      console.error('[Download] Could not choose save path:', error);
+      item.cancel();
     }
   });
 }
@@ -793,6 +820,7 @@ function createWindow() {
 
 // App lifecycle
 app.whenReady().then(async () => {
+  browserSettings.initialize(path.join(app.getPath('userData'), 'browser-settings.json'));
   // Wait for Widevine CDM to be ready (Castlabs Electron for DRM support)
   // NOTE: Skipping components.whenReady() due to crash in Castlabs v39
   // The CDM will still be downloaded/updated automatically in the background
@@ -879,11 +907,13 @@ app.whenReady().then(async () => {
   if (app.isPackaged) {
     autoUpdaterService.initialize(mainWindow);
     // Check for updates 3 seconds after app starts
-    setTimeout(() => {
-      autoUpdaterService.checkForUpdates().catch(err => {
-        console.log('Auto-update check failed:', err.message);
-      });
-    }, 3000);
+    if (browserSettings.get().autoCheckUpdates) {
+      setTimeout(() => {
+        autoUpdaterService.checkForUpdates().catch(err => {
+          console.log('Auto-update check failed:', err.message);
+        });
+      }, 3000);
+    }
   } else {
     // In dev mode, register stub handlers to avoid IPC errors
     ipcMain.handle('check-for-updates', () => {
@@ -1179,6 +1209,28 @@ ipcMain.handle('privacy-clear-site-permissions', (event, hostname) => {
   return privacyService.clearSitePermissions(hostname);
 });
 
+ipcMain.handle('browser-settings-get', () => ({
+  ...browserSettings.get(),
+  defaultDownloadDirectory: app.getPath('downloads')
+}));
+ipcMain.handle('browser-settings-set', (event, key, value) => browserSettings.setBoolean(key, value));
+ipcMain.handle('downloads-choose-directory', async (event) => {
+  const ownerWindow = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showOpenDialog(ownerWindow || undefined, {
+    title: 'Choose download folder',
+    defaultPath: downloadFolder(),
+    properties: ['openDirectory']
+  });
+  if (result.canceled || !result.filePaths[0]) return { canceled: true };
+  return browserSettings.setDownloadDirectory(result.filePaths[0]);
+});
+ipcMain.handle('downloads-reset-directory', () => browserSettings.setDownloadDirectory(null));
+ipcMain.handle('downloads-open-directory', async () => {
+  const directory = downloadFolder();
+  const error = await shell.openPath(directory);
+  return error ? { success: false, error } : { success: true };
+});
+
 // Shield (Encrypted DNS) IPC Handlers
 ipcMain.handle('shield-get-status', () => {
   return dnsShield.getStatus();
@@ -1215,7 +1267,7 @@ ipcMain.handle('download-url', (event, url, options = {}) => {
 
       dialog.showSaveDialog(ownerWindow || undefined, {
         title: options.title || 'Save File',
-        defaultPath: `download.${extension}`
+        defaultPath: path.join(downloadFolder(), `download.${extension}`)
       }).then((result) => {
         if (!result.canceled && result.filePath) {
           fs.promises.writeFile(result.filePath, data).catch(error => {
@@ -1230,7 +1282,8 @@ ipcMain.handle('download-url', (event, url, options = {}) => {
     const targetSession = session.fromPartition(options.partition || 'persist:main');
     queueDownload(targetSession, url, {
       title: options.title || 'Save File',
-      windowId: ownerWindow?.id
+      windowId: ownerWindow?.id,
+      prompt: options.prompt
     });
     return { success: true };
   } catch (error) {

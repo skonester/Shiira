@@ -15,6 +15,9 @@ The project is a modern homage rather than a port. It does not depend on origina
 ## Highlights
 
 - Dark custom browser chrome with the Shiira Night theme
+- First-run welcome setup for theme and search engine choices
+- Settings for home and startup behavior, appearance, search, downloads, site permissions, privacy, passwords, and updates
+- Custom theme color wheel with color harmony, monochrome, texture, strength, and rotation controls
 - Tabbed browsing with drag support, audio mute indicators, and lazy session restore
 - Full-window Tab Expose view for switching between open tabs
 - Drawer-style panels for bookmarks, history, cache controls, and RSS
@@ -27,7 +30,13 @@ The project is a modern homage rather than a port. It does not depend on origina
 - Optional clear-on-exit cache behavior
 - Built-in update checks and in-app installer flow
 
-## Recent Changes (0.3.2)
+## Recent Changes (0.3.4)
+
+- Expanded Settings with Zenium-inspired sections for startup, downloads, search suggestions, site permissions, browsing data, passwords, and updates.
+- Added persistent download folder, save prompt, and automatic update check preferences.
+- Added configurable Home button destination and a choice to restore tabs on startup.
+
+## Previous Changes (0.3.2)
 
 - Fixed the default YouTube playback breakage caused by aggressive site-specific script injection.
 - Removed the custom DOM/player hacks that were causing black screens and anti-adblock detection triggers.
@@ -74,6 +83,7 @@ The project is a modern homage rather than a port. It does not depend on origina
 | `Alt+Left` | Back |
 | `Alt+Right` | Forward |
 | `Ctrl+H` | History |
+| `Ctrl+,` | Settings |
 | `Ctrl+Shift+B` | Toggle bookmarks bar |
 | `Ctrl+Shift+E` | Tab Expose |
 | `Ctrl+Shift+I` | Developer tools |

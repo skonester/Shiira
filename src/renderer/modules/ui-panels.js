@@ -34,7 +34,7 @@ export const UIPanelsMixin = {
   },
 
   handleMainMenuAction(action) {
-    const panelActions = ['history', 'password-anvil', 'vault', 'themes', 'import-chrome', 'about', 'shiira-palettes', 'tab-expose', 'private-tab'];
+    const panelActions = ['history', 'password-anvil', 'vault', 'themes', 'settings', 'import-chrome', 'about', 'shiira-palettes', 'tab-expose', 'private-tab'];
     const toggleActions = ['favorites', 'adblock', 'shield', 'bookmarks-bar']; // Actions that don't close the menu
     const isOpeningPanel = panelActions.includes(action);
     const isToggleAction = toggleActions.includes(action);
@@ -65,6 +65,10 @@ export const UIPanelsMixin = {
       case 'themes':
         this.hideMainMenu(true); // Instant hide
         this.showThemesModal();
+        break;
+      case 'settings':
+        this.hideMainMenu(true);
+        this.showSettings();
         break;
       case 'shiira-palettes':
         this.hideMainMenu(true); // Instant hide
@@ -238,5 +242,7 @@ export const UIPanelsMixin = {
     this.hideSuggestions();
     this.hideShiiraDrawer?.();
     this.hideTabExpose?.();
+    this.hideSettings?.();
+    this.hideThemesModal?.();
   }
 };

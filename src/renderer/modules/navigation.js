@@ -126,6 +126,11 @@ export const NavigationMixin = {
   },
 
   goHome() {
+    const customHome = localStorage.getItem('shiira-homepage-url');
+    if (customHome) {
+      this.navigate(customHome);
+      return;
+    }
     if (!this.activeTabId) return;
     const tab = this.tabs.find(t => t.id === this.activeTabId);
     if (tab) {
@@ -362,7 +367,7 @@ export const NavigationMixin = {
         break;
       case 'save-link':
         if (params.linkURL) {
-          await window.shiiraAPI.downloadFile(params.linkURL, { title: 'Save Link As' });
+          await window.shiiraAPI.downloadFile(params.linkURL, { title: 'Save Link As', prompt: true });
         }
         break;
       case 'open-image-new-tab':
@@ -373,7 +378,7 @@ export const NavigationMixin = {
       case 'save-image':
         if (params.srcURL) {
           const imageSource = await this.getContextImageSource(webview, params.srcURL);
-          await window.shiiraAPI.downloadFile(imageSource, { title: 'Save Image As' });
+          await window.shiiraAPI.downloadFile(imageSource, { title: 'Save Image As', prompt: true });
         }
         break;
       case 'copy-image':
@@ -390,7 +395,7 @@ export const NavigationMixin = {
       case 'save-page':
         try {
           const url = webview.getURL?.();
-          if (url) await window.shiiraAPI.downloadFile(url, { title: 'Save Page As' });
+          if (url) await window.shiiraAPI.downloadFile(url, { title: 'Save Page As', prompt: true });
         } catch (e) {}
         break;
       case 'view-source':

@@ -22,6 +22,7 @@ import { BrightnessControlMixin } from './modules/brightness-control.js';
 import { WelcomeParticlesMixin } from './modules/welcome-particles.js';
 import { ModalSystemMixin } from './modules/modal-system.js';
 import { ThemesMixin } from './modules/themes.js';
+import { SettingsMixin } from './modules/settings.js';
 import { BookmarksMixin } from './modules/bookmarks.js';
 import TextContextMenuMixin from './modules/text-context-menu.js';
 import { PermissionDialogMixin } from './modules/permission-dialog.js';
@@ -106,6 +107,7 @@ class ShiiraBrowser {
     this.initThemes();
     this.initDarkWebRenderer();
     this.initShiiraHomage();
+    this.initWelcomeSettings();
     this.initBookmarksBar();
     this.initTextContextMenu();
     this.initPermissionDialog();
@@ -932,6 +934,10 @@ class ShiiraBrowser {
   // Session persistence methods
   async restoreSession() {
     try {
+      if (localStorage.getItem('shiira-restore-session') === 'false') {
+        await window.shiiraAPI.session.clear();
+        return false;
+      }
       const session = await window.shiiraAPI.session.load();
       if (!session || !session.tabs || session.tabs.length === 0) {
         console.log('[Session] No session to restore');
@@ -977,6 +983,7 @@ class ShiiraBrowser {
 
   async saveSession() {
     try {
+      if (localStorage.getItem('shiira-restore-session') === 'false') return true;
       // Only save if this is the last window
       const windowCount = await window.shiiraAPI.session.getWindowCount();
       if (windowCount > 1) {
@@ -1070,6 +1077,7 @@ applyMixin(ShiiraBrowser, KeyboardShortcutsMixin); // Keyboard shortcuts
 applyMixin(ShiiraBrowser, BrightnessControlMixin); // Brightness slider
 applyMixin(ShiiraBrowser, WelcomeParticlesMixin);  // Welcome page particles
 applyMixin(ShiiraBrowser, ThemesMixin);            // Theme management
+applyMixin(ShiiraBrowser, SettingsMixin);          // First-run welcome and settings
 applyMixin(ShiiraBrowser, ModalSystemMixin);       // Modal dialogs and notifications
 applyMixin(ShiiraBrowser, TextContextMenuMixin);   // Text input context menus
 applyMixin(ShiiraBrowser, PermissionDialogMixin);  // Permission request dialogs

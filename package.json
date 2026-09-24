@@ -1,6 +1,6 @@
 {
   "name": "shiira-browser",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Shiira - A super dark browser inspired by the classic Shiira project",
   "main": "src/main/main.js",
   "scripts": {
@@ -48,6 +48,8 @@
     "files": [
       "src/**/*",
       "assets/**/*",
+      "THIRD_PARTY_NOTICES/**/*",
+      "credits.md",
       "package.json"
     ],
     "extraResources": [
