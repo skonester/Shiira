@@ -18,7 +18,7 @@
 
   <p>
     <a href="https://github.com/skonester/Shiira/releases"><img src="https://img.shields.io/github/v/release/skonester/Shiira?display_name=tag&sort=semver&color=8b5cf6&label=latest" alt="Latest release"></a>
-    <a href="https://github.com/skonester/Shiira/blob/main/LICENSE"><img src="https://img.shields.io/github/license/skonester/Shiira?color=22c55e" alt="GPL-3.0-only license"></a>
+    <a href="https://github.com/skonester/Shiira/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--only-22c55e" alt="GPL-3.0-only license"></a>
     <a href="https://github.com/skonester/Shiira/stargazers"><img src="https://img.shields.io/github/stars/skonester/Shiira?style=flat&color=f59e0b" alt="GitHub stars"></a>
     <a href="https://github.com/skonester/Shiira/issues"><img src="https://img.shields.io/github/issues/skonester/Shiira?color=38bdf8" alt="Open issues"></a>
     <a href="https://www.electronjs.org/"><img src="https://img.shields.io/badge/built%20with-Electron-47848f?logo=electron&logoColor=white" alt="Built with Electron"></a>
@@ -27,6 +27,19 @@
   <img src="github.png" alt="Shiira Browser interface" width="820">
 
 </div>
+
+> [!NOTE]
+> Shiira is in active development and is best used as a secondary browser while the project matures. Please report bugs and unexpected behavior with your operating system, Shiira version, and reproduction steps.
+
+## At a glance
+
+| | |
+| --- | --- |
+| **Engine** | Chromium via Electron |
+| **Release** | `0.3.5` |
+| **Platforms** | Windows · macOS · Linux |
+| **License** | GPL-3.0-only |
+| **Best for** | Tab-heavy workflows, customization, and focused browsing |
 
 ## Why Shiira?
 
@@ -94,6 +107,9 @@ Visit the **[Releases](https://github.com/skonester/Shiira/releases)** page to d
 | macOS | DMG |
 | Linux | AppImage and DEB |
 
+> [!WARNING]
+> Development builds may change behavior or browser-data formats. Back up important browser data before testing unreleased builds.
+
 ### Run from source
 
 ```bash
@@ -103,7 +119,11 @@ npm install
 npm run dev
 ```
 
-> Shiira is an active, early-stage project. Back up important browser data before testing development builds.
+The development command starts Electron with logging enabled. To run the packaged application directly:
+
+```bash
+npm start
+```
 
 ## Keyboard shortcuts
 
@@ -157,6 +177,15 @@ npm run build:linux
 
 Build artifacts are written to `dist/`.
 
+## How it works
+
+Shiira is a desktop browser built around Electron and Chromium:
+
+- **Main process** handles windows, tabs, downloads, updates, browser services, filtering, and persistence.
+- **Preload bridge** exposes a constrained IPC API to the renderer.
+- **Renderer** provides the browser chrome, sidebar, palettes, settings, and tab workflow.
+- **Filter lists and assets** ship with the application and support the browser’s ad-blocking and visual identity.
+
 ## Project structure
 
 ```text
@@ -185,6 +214,12 @@ Bug reports, feature ideas, and pull requests are welcome. Before opening an iss
 - **[Open an issue](https://github.com/skonester/Shiira/issues/new/choose)**
 - **[Browse discussions](https://github.com/skonester/Shiira/discussions)**
 - **[Read the credits and attributions](credits.md)**
+
+For code changes, start with a focused issue or pull request description and include screenshots when changing browser chrome or user-facing behavior. Run the test suite before submitting:
+
+```bash
+npm test
+```
 
 ## License
 
