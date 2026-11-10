@@ -1,143 +1,153 @@
-<p align="center">
-  <img src="Shiira.png" width="128" height="128" alt="Shiira Logo" />
-</p>
+<div align="center">
 
-<p align="center">
-  <img src="github.png" width="420" alt="Shiira Browser GitHub preview" />
-</p>
+  <img src="Shiira.png" alt="Shiira Browser logo" width="128" height="128">
 
-# Shiira Browser <img src="GPL3.png" align="right" height="48" alt="GPLv3 Logo" />
+  # Shiira Browser
 
-Shiira is an Electron-based desktop browser inspired by the classic Shiira browser for Mac OS X. It combines a dark custom interface with practical browser features such as tab management, bookmarks, history, ad blocking, session restore, password storage, and an assistant sidebar. It is meant to function as a backup secondary browser.
+  ### A calm, capable browser for the way you actually browse.
 
-The project is a modern homage rather than a port. It does not depend on original Shiira source code; the design direction is based on public descriptions of the original browser and its interface ideas.
+  A modern Electron homage to the classic Shiira browser for Mac OS X — with a dark, customizable interface, powerful tab workflows, and practical privacy tools.
 
-## Highlights
+  <p>
+    <a href="https://github.com/skonester/Shiira/releases"><strong>Download</strong></a>
+    ·
+    <a href="https://github.com/skonester/Shiira/issues">Report a bug</a>
+    ·
+    <a href="https://github.com/skonester/Shiira/discussions">Join the discussion</a>
+  </p>
 
-- Dark custom browser chrome with the Shiira Night theme
-- First-run welcome setup for theme and search engine choices
-- Settings for home and startup behavior, appearance, search, downloads, site permissions, privacy, passwords, and updates
-- Custom theme color wheel with color harmony, monochrome, texture, strength, and rotation controls
-- Tabbed browsing with drag support, audio mute indicators, and lazy session restore
-- Full-window Tab Expose view for switching between open tabs
-- Drawer-style panels for bookmarks, history, cache controls, and RSS
-- Bookmarks bar, favorites launcher, and Chrome bookmark import
-- Search from the home view with Google, DuckDuckGo, Brave, and Wikipedia
-- Native ad blocking with network and cosmetic filtering
-- Passive, compatibility-safe filtering for YouTube and video-heavy sites
-- Password manager with secure storage and CSV import
-- Cache, cookie, and site storage cleanup tools
-- Optional clear-on-exit cache behavior
-- Built-in update checks and in-app installer flow
+  <p>
+    <a href="https://github.com/skonester/Shiira/releases"><img src="https://img.shields.io/github/v/release/skonester/Shiira?display_name=tag&sort=semver&color=8b5cf6&label=latest" alt="Latest release"></a>
+    <a href="https://github.com/skonester/Shiira/blob/main/LICENSE"><img src="https://img.shields.io/github/license/skonester/Shiira?color=22c55e" alt="GPL-3.0-only license"></a>
+    <a href="https://github.com/skonester/Shiira/stargazers"><img src="https://img.shields.io/github/stars/skonester/Shiira?style=flat&color=f59e0b" alt="GitHub stars"></a>
+    <a href="https://github.com/skonester/Shiira/issues"><img src="https://img.shields.io/github/issues/skonester/Shiira?color=38bdf8" alt="Open issues"></a>
+    <a href="https://www.electronjs.org/"><img src="https://img.shields.io/badge/built%20with-Electron-47848f?logo=electron&logoColor=white" alt="Built with Electron"></a>
+  </p>
 
-## Recent Changes (0.3.5)
+  <img src="github.png" alt="Shiira Browser interface" width="820">
 
-Shiira now has an Arc-style vertical sidebar and Chrome extensions, both designed after [Solamar](https://github.com/Bambeek/solamar). The classic top tab bar is still available in Settings > Look and Feel.
+</div>
 
-- **Spaces**: separate sets of tabs, each with its own name, emoji and colour. The sidebar takes on the space's colour.
-- **Favorites**: a grid of icons at the top of the sidebar, shared by every space.
-- **Pinned tabs and folders**: kept across restarts. Closing a pinned tab only unloads it, and it returns to its pinned page.
-- **Today tabs**: tabs you have not opened for 12 hours move to the Archive (Ctrl+Shift+A). You can change the time or turn this off.
-- **Drag and drop**: reorder tabs, drop them on the favorites grid, into folders, or onto another space's icon.
-- **Command bar** (Ctrl+T): open a site, search, jump to any tab or space, or run an action.
-- **Split view**: two tabs side by side, with a divider you can drag.
-- **Peek**: Shift+click a link to preview it over the page, then keep it as a tab or put it in split view.
-- **Tab sleep**: tabs you are not using free their memory after 30 minutes and reload when opened.
-- **Import from Arc**: brings over Arc's spaces, pinned tabs, folders and favorites. Arc's files are only read.
-- **Chrome extensions**: add Manifest V3 extensions from the Chrome Web Store. Shiira shows what an extension can do before it is added, and its button appears next to the address bar. Manage or remove them in Settings > Extensions. Extensions never run in private tabs.
-- **Ad blocker fix**: the full Ghostery engine failed to start ("second handler") and Shiira fell back to its small bundled rule list, while YouTube's blocking scripts ran several times per page and broke parts of YouTube. Ghostery now runs on the tabs' session only, and each blocking script runs once per page.
+## Why Shiira?
 
-## Previous Changes (0.3.4)
+Shiira is built for people who want a browser that feels like *their* workspace. It pairs a focused dark interface with the browser features you depend on every day, without turning the window into a dashboard.
 
-- Expanded Settings with Zenium-inspired sections for startup, downloads, search suggestions, site permissions, browsing data, passwords, and updates.
-- Added persistent download folder, save prompt, and automatic update check preferences.
-- Added configurable Home button destination and a choice to restore tabs on startup.
-
-## Previous Changes (0.3.2)
-
-- Fixed the default YouTube playback breakage caused by aggressive site-specific script injection.
-- Removed the custom DOM/player hacks that were causing black screens and anti-adblock detection triggers.
-- Simplified startup so the browser opens quickly without waiting on slower background services.
-- Removed the duplicate startup window initialization that created the extra Electron window.
-- Bumped the app version and ensured the About panel can trigger a real app update check from the browser UI.
-- Updated the app update flow so the check-for-updates action in the About panel reports status and can download/install updates.
-
-## Shiira-Inspired Features
-
-| Feature | Current status |
+|  |  |
 | --- | --- |
-| Tabbed windows | Implemented |
-| Bookmark management | Implemented |
-| Side drawer for bookmarks and history | Implemented as Shiira palettes |
-| Bookmarks toolbar | Implemented |
-| Search field with selectable search engine | Implemented |
-| Cache control panel | Implemented in the Cache palette |
-| Remove cookies and cache at termination | Implemented as a Cache palette toggle |
-| Window appearance switching | Implemented as themes |
-| Favicons | Implemented |
-| Searchable history | Implemented |
-| Safari bookmark sharing | Not implemented; Chrome import is available |
-| Toolbar customization and toolbar icon switching | Not implemented |
-| Favicon list and per-bookmark favicon toggle | Not implemented |
-| Help document | Not implemented |
-| Multiple source windows and HTTP header source view | Not implemented |
-| Wheel-button tab operations | Not implemented |
-| Auto-tab for bookmark folders | Not implemented |
-| Back/forward list on toolbar buttons | Not implemented |
+| **Organize your attention** | Spaces, favorites, pinned tabs, folders, split view, Peek, and an archive for tabs you have not used recently. |
+| **Make it yours** | Shiira Night, themes, a custom color wheel, flexible sidebar/top-tab layouts, and configurable startup behavior. |
+| **Browse with confidence** | Native ad blocking, cosmetic filtering, private tabs, site-permission controls, cache tools, and secure password storage. |
+| **Keep your workflow moving** | Command bar, Tab Expose, Chrome extension support, Arc import, bookmarks, history, RSS, and session restore. |
 
-## Keyboard Shortcuts
+## Feature highlights
 
-| Shortcut | Action |
+### A better way to manage tabs
+
+- **Spaces** keep separate projects in their own tab sets, names, emoji, and colors.
+- **Favorites, pinned tabs, and folders** stay available across restarts.
+- **Today tabs** automatically move inactive tabs to the Archive.
+- **Split view** places two tabs side by side, while **Peek** previews links without interrupting the page you are reading.
+- **Tab sleep** releases memory from tabs you are not using and reloads them when needed.
+- **Tab Expose** gives you a visual overview of every open tab.
+
+### Practical browser tools
+
+- Chrome bookmark import and **Arc space import**.
+- Manifest V3 **Chrome extensions** from the Chrome Web Store.
+- Search with Google, DuckDuckGo, Brave, or Wikipedia.
+- Bookmarks bar, favorites launcher, searchable history, RSS, and session restore.
+- Cache, cookies, site storage, downloads, permissions, passwords, and update controls.
+
+### Privacy without ceremony
+
+- Network and cosmetic ad blocking powered by a bundled filtering engine.
+- Compatibility-safe filtering for YouTube and video-heavy sites.
+- Private tabs that keep extensions disabled.
+- Optional clear-on-exit cache behavior and straightforward browsing-data controls.
+- Password storage backed by the operating system keychain.
+
+## Latest release — `0.3.5`
+
+The current release adds the Arc-style vertical sidebar and Chrome extension support, while keeping the classic top tab bar available in **Settings → Look and Feel**.
+
+<details>
+<summary><strong>See what changed</strong></summary>
+
+- Spaces with independent names, emoji, colors, and tab sets.
+- Shared favorites, pinned tabs, folders, and archived Today tabs.
+- Command bar (`Ctrl+T`) for opening sites, searching, and jumping between tabs or spaces.
+- Split view, Peek, tab sleep, and Arc import.
+- Chrome Web Store extensions with capability previews and private-tab protection.
+- A more reliable Ghostery-powered ad-blocking session and one-time-per-page blocking scripts.
+
+</details>
+
+## Download and run
+
+### Download a release
+
+Visit the **[Releases](https://github.com/skonester/Shiira/releases)** page to download the latest installer or portable build.
+
+| Platform | Available builds |
 | --- | --- |
-| `Ctrl+T` | Command bar (sidebar layout) or new tab (top tabs layout) |
-| `Ctrl+W` | Close tab (pinned tabs and favorites unload) |
-| `Ctrl+S` | Hide or show the sidebar |
-| `Ctrl+D` | Pin or unpin tab |
-| `Ctrl+Shift+\` | Split view with the next tab |
-| `Ctrl+Shift+A` | Archived tabs |
-| `Ctrl+Shift+C` | Copy page address |
-| `Ctrl+Shift+N` | New private tab |
-| `Alt+1`…`Alt+9` | Go to space 1–9 |
-| `Ctrl+Alt+Left` / `Ctrl+Alt+Right` | Previous / next space |
-| `Shift+click` a link | Open it in Peek |
-| `Ctrl+Shift+T` | Reopen closed tab |
-| `Ctrl+Tab` | Next tab |
-| `Ctrl+Shift+Tab` | Previous tab |
-| `Ctrl+L` | Focus URL bar |
-| `Ctrl+R` / `F5` | Reload |
-| `Ctrl+Shift+R` | Hard reload |
-| `Alt+Left` | Back |
-| `Alt+Right` | Forward |
-| `Ctrl+H` | History |
-| `Ctrl+,` | Settings |
-| `Ctrl+Shift+B` | Toggle bookmarks bar |
-| `Ctrl+Shift+E` | Tab Expose |
-| `Ctrl+Shift+I` | Developer tools |
-| `Escape` | Close popups and panels |
+| Windows | Installer and portable executable |
+| macOS | DMG |
+| Linux | AppImage and DEB |
 
-## Development
-
-Install dependencies:
+### Run from source
 
 ```bash
+git clone https://github.com/skonester/Shiira.git
+cd Shiira
 npm install
-```
-
-Run the app in development mode:
-
-```bash
 npm run dev
 ```
 
-## Build
+> Shiira is an active, early-stage project. Back up important browser data before testing development builds.
 
-Create a production build:
+## Keyboard shortcuts
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+T` | Open the command bar or a new tab |
+| `Ctrl+W` | Close or unload the current tab |
+| `Ctrl+S` | Show or hide the sidebar |
+| `Ctrl+D` | Pin or unpin the current tab |
+| `Ctrl+Shift+\` | Split view with the next tab |
+| `Ctrl+Shift+A` | Open archived tabs |
+| `Ctrl+Shift+N` | Open a private tab |
+| `Ctrl+Shift+E` | Open Tab Expose |
+| `Ctrl+L` | Focus the URL bar |
+| `Ctrl+H` | Open history |
+| `Ctrl+,` | Open settings |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
+| `Alt+1` … `Alt+9` | Switch to a space |
+| `Shift` + click a link | Open Peek |
+
+<details>
+<summary><strong>More shortcuts</strong></summary>
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+Shift+C` | Copy page address |
+| `Ctrl+Shift+T` | Reopen closed tab |
+| `Ctrl+Shift+B` | Toggle bookmarks bar |
+| `Ctrl+Shift+I` | Open developer tools |
+| `Ctrl+Alt+Left` / `Ctrl+Alt+Right` | Previous / next space |
+| `Ctrl+R` / `F5` | Reload |
+| `Ctrl+Shift+R` | Hard reload |
+| `Alt+Left` / `Alt+Right` | Back / forward |
+| `Escape` | Close popups and panels |
+
+</details>
+
+## Build
 
 ```bash
 npm run build
 ```
 
-Platform-specific builds are also available:
+For a platform-specific package:
 
 ```bash
 npm run build:win
@@ -147,10 +157,10 @@ npm run build:linux
 
 Build artifacts are written to `dist/`.
 
-## Project Structure
+## Project structure
 
 ```text
-src/main/                 Main Electron process and services
+src/main/                 Main Electron process and browser services
 src/preload/              Secure IPC bridge
 src/renderer/             Browser UI
 src/renderer/modules/     Browser feature modules
@@ -160,10 +170,30 @@ build/                    Build hooks and installer assets
 installer/                Installer UI
 ```
 
+## Status and roadmap
+
+Shiira is usable today as a secondary desktop browser and is still evolving. The classic Shiira-inspired feature set is being rebuilt incrementally around the modern sidebar workflow.
+
+**Implemented:** tabbed windows, bookmarks, history, palettes, bookmarks bar, themes, favicons, cache controls, session restore, ad blocking, spaces, extensions, split view, Peek, tab sleep, Arc import, and password storage.
+
+**Still planned:** Safari bookmark sharing, toolbar customization, per-bookmark favicon controls, a full help document, source/header inspection, wheel-button tab actions, and bookmark-folder auto-tabs.
+
+## Contributing
+
+Bug reports, feature ideas, and pull requests are welcome. Before opening an issue, please search existing issues and include your operating system, Shiira version, steps to reproduce, and relevant logs or screenshots.
+
+- **[Open an issue](https://github.com/skonester/Shiira/issues/new/choose)**
+- **[Browse discussions](https://github.com/skonester/Shiira/discussions)**
+- **[Read the credits and attributions](credits.md)**
+
 ## License
 
-Shiira Browser is licensed under **GPL-3.0-only**.
+Shiira Browser is licensed under **[GPL-3.0-only](LICENSE)**.
 
-The original Shiira project was released under **BSD-3-Clause**. This project is an independent Electron implementation and homage, with no original Shiira source code included.
+This project is an independent Electron implementation and homage to the classic Shiira browser. It does not include original Shiira source code. For copyright attributions and dependency licensing details, see [credits.md](credits.md) and [`THIRD_PARTY_NOTICES/`](THIRD_PARTY_NOTICES/).
 
-For copyright attributions, project background, and dependency licensing details, see [credits.md](credits.md).
+<div align="center">
+
+  <sub>Built with curiosity, Chromium, and a fondness for beautiful browser chrome.</sub>
+
+</div>
