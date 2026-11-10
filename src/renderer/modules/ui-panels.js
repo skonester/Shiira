@@ -244,5 +244,10 @@ export const UIPanelsMixin = {
     this.hideTabExpose?.();
     this.hideSettings?.();
     this.hideThemesModal?.();
+    this.hideCommandBar?.();
+    this.closePeek?.();
+    this.hideArchivePanel?.();
+    this.hideSpaceEditor?.();
+    if (this.extensionPrompt) this.decideExtensionInstall?.(false);
   }
 };

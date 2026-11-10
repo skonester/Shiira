@@ -28,6 +28,10 @@ import TextContextMenuMixin from './modules/text-context-menu.js';
 import { PermissionDialogMixin } from './modules/permission-dialog.js';
 import { ShiiraHomageMixin } from './modules/shiira-homage.js';
 import { DarkWebRendererMixin } from './modules/dark-web-renderer.js';
+import { SidebarMixin } from './modules/sidebar.js';
+import { CommandBarMixin } from './modules/command-bar.js';
+import { SplitPeekMixin } from './modules/split-peek.js';
+import { ExtensionsMixin } from './modules/extensions.js';
 
 console.log('[Shiira] Loading modular renderer...');
 
@@ -96,6 +100,11 @@ class ShiiraBrowser {
     this.bindEvents();
     
     // Initialize modules
+    this.initSidebar();
+    this.initCommandBar();
+    this.initSplitView();
+    this.initPeek();
+    this.initExtensions();
     this.setupWindowControls();
     this.setupDragHandlers();
     this.initUpdateListener();
@@ -123,10 +132,10 @@ class ShiiraBrowser {
     window.shiiraAPI.onOpenUrl((url) => {
       if (!urlOpened) {
         urlOpened = true;
-        if (this.tabs.length === 1 && this.tabs[0].isHome) {
-          this.closeTab(this.tabs[0].id, true);
-        }
+        // An empty home tab on screen makes way for the page being opened.
+        const home = this.tabs.find(t => t.id === this.activeTabId && t.isHome);
         this.createTab(url);
+        if (home) this.closeTab(home.id, true);
       }
     });
     
@@ -149,21 +158,16 @@ class ShiiraBrowser {
     // Defer slow startup work until after the first paint.
     requestAnimationFrame(() => {
       void this.loadStartupInfo();
-      if (!urlOpened) {
-        this.createHomeTab();
-      }
     });
 
-    // Restore session in the background without delaying the first UI paint.
-    void this.restoreSession().then((sessionRestored) => {
-      if (sessionRestored) {
-        return;
-      }
-      if (!urlOpened && this.tabs.length === 0) {
-        this.createHomeTab();
+    // Load spaces and pinned tabs, then restore today tabs; then show the tab that was on screen.
+    void this.restoreSession().then((restored) => {
+      if (!urlOpened || !this.activeTabId) {
+        this.activateInitialTab(restored || {});
       }
     }).catch(err => {
       console.error('[Session] Restore failed in background:', err);
+      if (!this.activeTabId) this.createHomeTab();
     });
 
     // Set up session save on window close
@@ -932,57 +936,60 @@ class ShiiraBrowser {
   }
 
   // Session persistence methods
+  // Spaces, pinned tabs and favorites always come back (spaces.json).
+  // Today tabs come back only with "Continue where you left off" (session.dat). All of them start asleep.
   async restoreSession() {
+    await this.loadSpaces();
     try {
       if (localStorage.getItem('shiira-restore-session') === 'false') {
         await window.shiiraAPI.session.clear();
-        return false;
+        return null;
       }
       const session = await window.shiiraAPI.session.load();
       if (!session || !session.tabs || session.tabs.length === 0) {
         console.log('[Session] No session to restore');
-        return false;
+        return null;
       }
-      
+
       console.log('[Session] Restoring', session.tabs.length, 'tabs');
-      
-      // Restore each tab - only load the active one immediately
-      const activeIndex = session.activeTabIndex >= 0 ? session.activeTabIndex : 0;
-      
-      for (let i = 0; i < session.tabs.length; i++) {
-        const tabData = session.tabs[i];
-        const isActiveTab = (i === activeIndex);
-        
-        if (tabData.isHome) {
-          this.createHomeTab();
-        } else if (tabData.url) {
-          // Only load the active tab immediately; defer others
-          this.createTab(tabData.url, { 
-            deferLoad: !isActiveTab,
-            title: tabData.title,
-            favicon: tabData.favicon
-          });
+      const knownSpaces = new Set(this.spaces.map(space => space.id));
+      let legacyActiveItemId = null;
+
+      session.tabs.forEach((tabData, index) => {
+        // Home tabs are not restored; a space without tabs gets a fresh one.
+        if (tabData.isHome || !tabData.url) return;
+        const tabId = this.createTab(tabData.url, {
+          deferLoad: true,
+          title: tabData.title,
+          favicon: tabData.favicon,
+          section: 'today',
+          spaceId: knownSpaces.has(tabData.spaceId) ? tabData.spaceId : this.focusedSpaceId,
+          itemId: typeof tabData.itemId === 'string' ? tabData.itemId : undefined,
+          position: Number.isFinite(tabData.position) ? tabData.position : index,
+          customTitle: typeof tabData.customTitle === 'string' ? tabData.customTitle : '',
+          // Sessions from before spaces existed restart the archive timer.
+          lastActiveAt: Number.isFinite(tabData.lastActiveAt) ? tabData.lastActiveAt : Date.now()
+        });
+        if (index === session.activeTabIndex) {
+          legacyActiveItemId = this.tabs.find(t => t.id === tabId)?.itemId || null;
         }
-      }
-      
-      // Switch to the previously active tab
-      if (activeIndex >= 0 && activeIndex < this.tabs.length) {
-        this.switchTab(this.tabs[activeIndex].id);
-      }
-      
+      });
+
       // Clear the session file after successful restore
       await window.shiiraAPI.session.clear();
-      
+
       console.log('[Session] Restore complete');
-      return true;
+      return { legacyActiveItemId };
     } catch (e) {
       console.error('[Session] Restore failed:', e);
-      return false;
+      return null;
     }
   }
 
   async saveSession() {
     try {
+      // Spaces and pinned tabs are saved whatever the restore setting is.
+      await this.saveSpacesNow?.();
       if (localStorage.getItem('shiira-restore-session') === 'false') return true;
       // Only save if this is the last window
       const windowCount = await window.shiiraAPI.session.getWindowCount();
@@ -990,19 +997,25 @@ class ShiiraBrowser {
         console.log('[Session] Multiple windows open, not saving session');
         return false;
       }
-      
-      // Gather tab data - use pendingUrl if tab hasn't loaded yet
-      const tabsForSession = this.tabs.filter(tab => !tab.privateMode);
+
+      // Today tabs only; pinned tabs and favorites live in spaces.json.
+      const tabsForSession = this.tabs.filter(tab => !tab.privateMode && !tab.isHome && tab.section === 'today'
+        && !tab.element?.classList.contains('closing'));
       const tabsData = tabsForSession.map(tab => ({
-        url: tab.pendingUrl || tab.url || '',
+        url: this.currentTabUrl ? this.currentTabUrl(tab) : (tab.pendingUrl || tab.url || ''),
         title: tab.title || 'New Tab',
-        isHome: tab.isHome || false,
-        favicon: tab.favicon || null
-      }));
-      
+        isHome: false,
+        favicon: tab.favicon || null,
+        itemId: tab.itemId,
+        spaceId: tab.spaceId,
+        position: tab.position,
+        customTitle: tab.customTitle || '',
+        lastActiveAt: tab.lastActiveAt
+      })).filter(tab => tab.url && tab.url !== 'about:blank');
+
       // Find active tab index
       const activeTabIndex = tabsForSession.findIndex(t => t.id === this.activeTabId);
-      
+
       const sessionData = {
         tabs: tabsData,
         activeTabIndex: activeTabIndex,
@@ -1083,6 +1096,10 @@ applyMixin(ShiiraBrowser, TextContextMenuMixin);   // Text input context menus
 applyMixin(ShiiraBrowser, PermissionDialogMixin);  // Permission request dialogs
 applyMixin(ShiiraBrowser, ShiiraHomageMixin);      // Shiira homage features
 applyMixin(ShiiraBrowser, DarkWebRendererMixin);   // Forced dark page rendering
+applyMixin(ShiiraBrowser, SidebarMixin);           // Arc-style sidebar, spaces, archive, tab sleep
+applyMixin(ShiiraBrowser, CommandBarMixin);        // Command bar (Ctrl+T)
+applyMixin(ShiiraBrowser, SplitPeekMixin);         // Split view and Peek
+applyMixin(ShiiraBrowser, ExtensionsMixin);        // Chrome extensions
 
 // Start the browser
 console.log('[Shiira] Creating browser instance...');

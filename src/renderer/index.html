@@ -3,17 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' shiira-asset:; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src * data: blob: 'self' shiira-asset:; frame-src *; child-src *; connect-src 'self' https://www.startpage.com https://search.brave.com https://scira.ai https://*.scira.ai https://api.duckduckgo.com https://en.wikipedia.org;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' shiira-asset:; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src * data: blob: 'self' shiira-asset: crx:; frame-src *; child-src *; connect-src 'self' https://www.startpage.com https://search.brave.com https://scira.ai https://*.scira.ai https://api.duckduckgo.com https://en.wikipedia.org;">
   <title>Shiira</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="sidebar.css">
 </head>
 <body>
   <div id="app">
     <!-- Tab Bar with Window Controls -->
     <div id="tabbar">
+      <button id="tabbar-space" class="tabbar-space" type="button" title="Switch space" aria-label="Switch space">🏠</button>
       <div id="tabs-container">
         <!-- Tabs will be dynamically added here -->
       </div>
@@ -40,6 +42,59 @@
       </div>
     </div>
 
+    <div id="main-row">
+    <!-- Arc-style sidebar: favorites, space, pinned tabs, today tabs, space switcher -->
+    <aside id="sidebar" aria-label="Sidebar">
+      <div class="sb-top">
+        <button id="sb-collapse" class="sb-icon-btn" type="button" title="Hide sidebar (Ctrl+S)" aria-label="Hide sidebar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16M15 10l-2 2 2 2"/></svg>
+        </button>
+        <span class="sb-brand">Shiira</span>
+      </div>
+      <div id="sb-favorites" class="sb-favorites empty" data-drop-section="favorites" aria-label="Favorites"></div>
+      <div id="sb-space-head" class="sb-space-head">
+        <button id="sb-space-title" class="sb-space-title" type="button" title="Edit space">
+          <span id="sb-space-icon" class="sb-space-icon" aria-hidden="true">🏠</span>
+          <span id="sb-space-name" class="sb-space-name">Personal</span>
+        </button>
+        <button id="sb-space-more" class="sb-icon-btn" type="button" title="Space options" aria-label="Space options">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
+        </button>
+      </div>
+      <div class="sb-scroll">
+        <div class="sb-section sb-pinned-section" data-drop-section="pinned">
+          <div id="sb-pinned" class="sb-list" aria-label="Pinned tabs"></div>
+          <div id="sb-pinned-empty" class="sb-drop-hint">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 17v5M9 3h6l-1 6 3 3v2H7v-2l3-3z"/></svg>
+            Drag tabs here to pin them
+          </div>
+        </div>
+        <div class="sb-divider" role="presentation"></div>
+        <div class="sb-today-head">
+          <button id="sb-new-tab" class="sb-new-tab" type="button" title="New tab (Ctrl+T)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            <span>New Tab</span>
+          </button>
+          <button id="sb-clear-today" class="sb-clear hidden" type="button" title="Move today's tabs to the archive">Clear</button>
+        </div>
+        <div class="sb-section sb-today-section" data-drop-section="today">
+          <div id="sb-today" class="sb-list" aria-label="Today tabs"></div>
+        </div>
+      </div>
+      <footer class="sb-foot">
+        <button id="sb-archive" class="sb-icon-btn" type="button" title="Archived tabs (Ctrl+Shift+A)" aria-label="Archived tabs">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9M10 13h4"/></svg>
+        </button>
+        <div id="sb-space-dots" class="sb-space-dots" role="tablist" aria-label="Spaces"></div>
+        <button id="sb-add-space" class="sb-icon-btn" type="button" title="New space" aria-label="New space">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </footer>
+      <div id="sb-resizer" class="sb-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabindex="0" title="Drag to resize, double-click to reset"></div>
+    </aside>
+    <div id="sidebar-hotzone" aria-hidden="true"></div>
+
+    <div id="workspace">
     <!-- Navigation Bar -->
     <div id="navbar">
       <div class="nav-buttons">
@@ -75,6 +130,8 @@
         <div id="url-suggestions" class="url-suggestions hidden"></div>
       </div>
       <div class="nav-actions">
+        <!-- Chrome extension buttons for the tab on screen (electron-chrome-extensions) -->
+        <browser-action-list id="extension-actions" class="extension-actions hidden" partition="persist:main"></browser-action-list>
         <button id="btn-favorites" class="nav-btn favorites-btn hidden" title="Favorites">
           <img class="nav-icon" src="shiira-asset://ui-icons/heart.svg" alt="Favorites">
         </button>
@@ -177,6 +234,113 @@
               <div class="ai-loading">Searching...</div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Split view divider -->
+      <div id="split-divider" class="split-divider" role="separator" aria-orientation="vertical" aria-label="Resize split view" title="Drag to resize, double-click to reset"></div>
+
+      <!-- Peek: a link previewed over the page (Shift+click) -->
+      <div id="peek-overlay" class="peek-overlay hidden">
+        <div class="peek-card" role="dialog" aria-label="Peek">
+          <div class="peek-head">
+            <span id="peek-title" class="peek-title"></span>
+            <button id="peek-open-split" class="peek-btn" type="button" title="Open next to this page">Split View</button>
+            <button id="peek-open-tab" class="peek-btn primary" type="button" title="Keep it as a tab">Open as Tab</button>
+            <button id="peek-close" class="peek-btn icon" type="button" title="Close (Esc)" aria-label="Close Peek">×</button>
+          </div>
+          <div id="peek-webview-host" class="peek-webview-host"></div>
+        </div>
+      </div>
+    </div>
+    </div><!-- /#workspace -->
+    </div><!-- /#main-row -->
+
+    <!-- Tabs of other spaces wait here, out of sight -->
+    <div id="sb-parking" hidden></div>
+
+    <!-- Sidebar and tab menus -->
+    <div id="sb-menu" class="context-menu sb-menu hidden" role="menu"></div>
+
+    <!-- Command bar (Ctrl+T) -->
+    <div id="command-bar" class="command-bar-overlay hidden">
+      <div class="command-bar" role="dialog" aria-label="Command bar">
+        <div class="command-bar-input-row">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="command-bar-input" type="text" placeholder="Search, enter an address, or type a command" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="true" aria-controls="command-bar-results">
+        </div>
+        <div id="command-bar-results" class="command-bar-results" role="listbox"></div>
+        <div class="command-bar-hint"><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>Enter</kbd> open · <kbd>Alt</kbd>+<kbd>Enter</kbd> open in background · <kbd>Esc</kbd> close</div>
+      </div>
+    </div>
+
+    <!-- Archived tabs -->
+    <div id="archive-panel" class="shiira-modal hidden" role="dialog" aria-modal="true" aria-labelledby="archive-title">
+      <div class="shiira-modal-content archive-dialog">
+        <div class="shiira-modal-header">
+          <h3 id="archive-title">Archived Tabs</h3>
+          <button id="archive-close" class="panel-close-btn" type="button" title="Close" aria-label="Close">×</button>
+        </div>
+        <div class="archive-tools">
+          <input id="archive-search" type="search" placeholder="Search the archive" aria-label="Search the archive">
+          <button id="archive-clear" class="settings-action" type="button">Clear Archive</button>
+        </div>
+        <p id="archive-note" class="archive-note"></p>
+        <div id="archive-list" class="archive-list"></div>
+      </div>
+    </div>
+
+    <!-- "Add this extension?" (from the Chrome Web Store's Add to Chrome) -->
+    <div id="extension-install-dialog" class="shiira-modal hidden" role="alertdialog" aria-modal="true" aria-labelledby="extension-install-title">
+      <div class="shiira-modal-content extension-install-dialog">
+        <div class="shiira-modal-header extension-install-head">
+          <img id="extension-install-icon" class="hidden" width="40" height="40" alt="">
+          <h3 id="extension-install-title">Add extension?</h3>
+        </div>
+        <div class="shiira-modal-body">
+          <p id="extension-install-intro">It will be able to:</p>
+          <ul id="extension-install-permissions" class="extension-install-permissions"></ul>
+          <p class="extension-install-note">Extensions run in normal tabs, never in private tabs. You can remove it any time in Settings &gt; Extensions.</p>
+        </div>
+        <div class="shiira-modal-footer">
+          <button id="extension-install-cancel" class="modal-btn modal-btn-secondary" type="button">Cancel</button>
+          <button id="extension-install-allow" class="modal-btn modal-btn-primary" type="button">Add Extension</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- New / edit space -->
+    <div id="space-editor" class="shiira-modal hidden" role="dialog" aria-modal="true" aria-labelledby="space-editor-title">
+      <div class="shiira-modal-content space-editor-dialog">
+        <div class="shiira-modal-header">
+          <h3 id="space-editor-title">New Space</h3>
+        </div>
+        <div class="shiira-modal-body space-editor-body">
+          <div class="space-editor-top">
+            <span id="space-preview" class="space-preview" aria-hidden="true">🏠</span>
+            <div class="space-editor-field">
+              <label for="space-name">Name</label>
+              <input id="space-name" type="text" maxlength="60" placeholder="Work, Personal, Research…">
+            </div>
+          </div>
+          <div class="space-editor-field">
+            <span class="space-editor-label">Icon</span>
+            <div id="space-icons" class="space-icons"></div>
+            <input id="space-icon-custom" type="text" maxlength="8" placeholder="Or type any emoji" aria-label="Custom emoji">
+          </div>
+          <div class="space-editor-field">
+            <span class="space-editor-label">Colour</span>
+            <div class="space-colors-row">
+              <div id="space-colors" class="space-colors"></div>
+              <input id="space-color-custom" type="color" value="#7c6cf2" aria-label="Custom colour">
+            </div>
+          </div>
+        </div>
+        <div class="shiira-modal-footer">
+          <button id="space-editor-delete" class="modal-btn modal-btn-danger hidden" type="button">Delete</button>
+          <span class="space-editor-spacer"></span>
+          <button id="space-editor-cancel" class="modal-btn modal-btn-secondary" type="button">Cancel</button>
+          <button id="space-editor-save" class="modal-btn modal-btn-primary" type="button">Create Space</button>
         </div>
       </div>
     </div>
@@ -888,6 +1052,7 @@
             <button type="button" data-settings-section="downloads">Downloads</button>
             <button type="button" data-settings-section="privacy">Privacy and Security</button>
             <button type="button" data-settings-section="permissions">Site Permissions</button>
+            <button type="button" data-settings-section="extensions">Extensions</button>
             <button type="button" data-settings-section="passwords">Passwords</button>
             <button type="button" data-settings-section="updates">Updates</button>
             <button type="button" data-settings-section="about">About</button>
@@ -924,6 +1089,15 @@
                 <p>Changing this reloads the current page. Video sites keep their own appearance.</p>
               </div>
               <div class="settings-group">
+                <h5>Layout</h5>
+                <label for="settings-layout">Where your tabs live</label>
+                <select id="settings-layout">
+                  <option value="sidebar">Vertical sidebar with spaces (Arc style)</option>
+                  <option value="tabs">Top tab bar (classic Shiira)</option>
+                </select>
+                <p>Spaces, pinned tabs and favorites work in both layouts. Ctrl+S hides the sidebar; touch the left edge of the window to bring it back.</p>
+              </div>
+              <div class="settings-group">
                 <h5>Toolbar</h5>
                 <label class="settings-check"><input id="settings-bookmarks-bar" type="checkbox"> Show bookmarks bar</label>
                 <label class="settings-check"><input id="settings-favorites" type="checkbox"> Show Favorites launcher</label>
@@ -934,7 +1108,42 @@
               <div class="settings-group">
                 <h5>On startup</h5>
                 <label class="settings-check"><input id="settings-restore-session" type="checkbox"> Continue where you left off</label>
-                <p>Restore open tabs from the previous session. Turn this off to start on Shiira's home page.</p>
+                <p>Restore open tabs from the previous session. Turn this off to start on Shiira's home page. Pinned tabs, favorites and spaces always stay.</p>
+              </div>
+              <div class="settings-group">
+                <h5>Today tabs</h5>
+                <label for="settings-archive-hours">Move today tabs I have not opened to the archive after</label>
+                <select id="settings-archive-hours">
+                  <option value="0">Never</option>
+                  <option value="6">6 hours</option>
+                  <option value="12">12 hours</option>
+                  <option value="24">1 day</option>
+                  <option value="168">1 week</option>
+                </select>
+                <p>Archived tabs are one click away in the Archive (Ctrl+Shift+A). Pinned tabs and favorites are never archived.</p>
+                <button id="settings-open-archive" type="button" class="settings-action">Open archive</button>
+              </div>
+              <div class="settings-group">
+                <h5>Memory</h5>
+                <label for="settings-sleep-minutes">Put tabs I am not using to sleep after</label>
+                <select id="settings-sleep-minutes">
+                  <option value="0">Never</option>
+                  <option value="15">15 minutes</option>
+                  <option value="30">30 minutes</option>
+                  <option value="60">1 hour</option>
+                  <option value="240">4 hours</option>
+                </select>
+                <p>A sleeping tab frees its memory and reloads when you open it. Tabs playing sound and private tabs never sleep.</p>
+              </div>
+              <div class="settings-group">
+                <h5>Links</h5>
+                <label class="settings-check"><input id="settings-peek" type="checkbox"> Shift+click a link to preview it in Peek</label>
+                <p>Peek opens a page over the one you are on. Keep it as a tab, put it in split view, or press Esc.</p>
+              </div>
+              <div class="settings-group">
+                <h5>Moving from Arc</h5>
+                <p>Bring over Arc's spaces, pinned tabs, folders and favorites. Arc's files are only read, never changed.</p>
+                <button id="settings-import-arc" type="button" class="settings-action">Import from Arc…</button>
               </div>
               <div class="settings-group">
                 <h5>Browsing</h5>
@@ -992,6 +1201,20 @@
               <div id="settings-permission-list" class="settings-permission-list"></div>
               <button id="settings-clear-permissions" type="button" class="settings-action">Forget all site permissions…</button>
               <p id="settings-permission-status" role="status"></p>
+            </section>
+            <section class="settings-page hidden" data-settings-page="extensions">
+              <h4>Extensions</h4>
+              <div class="settings-group">
+                <h5>Chrome Web Store</h5>
+                <p>Shiira runs Chrome extensions (Manifest V3) from the Chrome Web Store. Open the store, choose an extension and press <strong>Add to Chrome</strong>. Shiira shows what it will be able to do before it is added. Extensions update on their own.</p>
+                <button id="settings-open-webstore" type="button" class="settings-action">Open the Chrome Web Store</button>
+              </div>
+              <div class="settings-group">
+                <h5>Installed</h5>
+                <div id="settings-extension-list" class="extension-list"></div>
+                <p id="settings-extension-status" role="status"></p>
+              </div>
+              <p>Extensions run in normal tabs and never in private tabs. Their buttons appear next to the address bar. A few Chrome-only features may not work yet.</p>
             </section>
             <section class="settings-page hidden" data-settings-page="passwords">
               <h4>Passwords</h4>

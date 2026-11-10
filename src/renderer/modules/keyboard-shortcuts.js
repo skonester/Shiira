@@ -17,10 +17,34 @@ export const KeyboardShortcutsMixin = {
   handleKeyboardShortcut(shortcut) {
     switch (shortcut) {
       case 'new-tab':
-        this.createTab();
+        this.handleNewTabShortcut ? this.handleNewTabShortcut() : this.createTab();
         break;
       case 'close-tab':
-        if (this.activeTabId) this.closeTab(this.activeTabId);
+        if (this.activeTabId) this.closeOrUnloadTab(this.activeTabId);
+        break;
+      case 'toggle-sidebar':
+        this.toggleSidebar?.();
+        break;
+      case 'pin-tab':
+        this.togglePin?.();
+        break;
+      case 'split-view':
+        this.toggleSplitView?.();
+        break;
+      case 'archive':
+        this.showArchivePanel?.();
+        break;
+      case 'copy-url':
+        this.copyTabUrl?.();
+        break;
+      case 'private-tab':
+        this.createTab(null, { privateMode: true, title: 'Private Tab' });
+        break;
+      case 'next-space':
+        this.focusAdjacentSpace?.(1);
+        break;
+      case 'prev-space':
+        this.focusAdjacentSpace?.(-1);
         break;
       case 'reopen-tab':
         this.reopenClosedTab();
@@ -62,6 +86,9 @@ export const KeyboardShortcutsMixin = {
       case 'close-popups':
         this.closeAllPopups();
         break;
+      default:
+        if (/^space-[1-9]$/.test(shortcut)) this.focusSpaceByIndex?.(Number(shortcut.slice(6)) - 1);
+        break;
     }
   },
 
@@ -83,17 +110,17 @@ export const KeyboardShortcutsMixin = {
         return;
       }
       
-      // Ctrl+T: New tab
+      // Ctrl+T: Command bar (sidebar layout) or new tab
       if (e.ctrlKey && !e.shiftKey && e.key === 't') {
         e.preventDefault();
-        this.createTab();
+        this.handleNewTabShortcut ? this.handleNewTabShortcut() : this.createTab();
         return;
       }
-      
-      // Ctrl+W: Close tab
+
+      // Ctrl+W: Close tab (pinned tabs and favorites unload instead)
       if (e.ctrlKey && !e.shiftKey && e.key === 'w') {
         e.preventDefault();
-        if (this.activeTabId) this.closeTab(this.activeTabId);
+        if (this.activeTabId) this.closeOrUnloadTab(this.activeTabId);
         return;
       }
       

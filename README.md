@@ -30,7 +30,24 @@ The project is a modern homage rather than a port. It does not depend on origina
 - Optional clear-on-exit cache behavior
 - Built-in update checks and in-app installer flow
 
-## Recent Changes (0.3.4)
+## Recent Changes (0.3.5)
+
+Shiira now has an Arc-style vertical sidebar and Chrome extensions, both designed after [Solamar](https://github.com/Bambeek/solamar). The classic top tab bar is still available in Settings > Look and Feel.
+
+- **Spaces**: separate sets of tabs, each with its own name, emoji and colour. The sidebar takes on the space's colour.
+- **Favorites**: a grid of icons at the top of the sidebar, shared by every space.
+- **Pinned tabs and folders**: kept across restarts. Closing a pinned tab only unloads it, and it returns to its pinned page.
+- **Today tabs**: tabs you have not opened for 12 hours move to the Archive (Ctrl+Shift+A). You can change the time or turn this off.
+- **Drag and drop**: reorder tabs, drop them on the favorites grid, into folders, or onto another space's icon.
+- **Command bar** (Ctrl+T): open a site, search, jump to any tab or space, or run an action.
+- **Split view**: two tabs side by side, with a divider you can drag.
+- **Peek**: Shift+click a link to preview it over the page, then keep it as a tab or put it in split view.
+- **Tab sleep**: tabs you are not using free their memory after 30 minutes and reload when opened.
+- **Import from Arc**: brings over Arc's spaces, pinned tabs, folders and favorites. Arc's files are only read.
+- **Chrome extensions**: add Manifest V3 extensions from the Chrome Web Store. Shiira shows what an extension can do before it is added, and its button appears next to the address bar. Manage or remove them in Settings > Extensions. Extensions never run in private tabs.
+- **Ad blocker fix**: the full Ghostery engine failed to start ("second handler") and Shiira fell back to its small bundled rule list, while YouTube's blocking scripts ran several times per page and broke parts of YouTube. Ghostery now runs on the tabs' session only, and each blocking script runs once per page.
+
+## Previous Changes (0.3.4)
 
 - Expanded Settings with Zenium-inspired sections for startup, downloads, search suggestions, site permissions, browsing data, passwords, and updates.
 - Added persistent download folder, save prompt, and automatic update check preferences.
@@ -72,8 +89,17 @@ The project is a modern homage rather than a port. It does not depend on origina
 
 | Shortcut | Action |
 | --- | --- |
-| `Ctrl+T` | New tab |
-| `Ctrl+W` | Close tab |
+| `Ctrl+T` | Command bar (sidebar layout) or new tab (top tabs layout) |
+| `Ctrl+W` | Close tab (pinned tabs and favorites unload) |
+| `Ctrl+S` | Hide or show the sidebar |
+| `Ctrl+D` | Pin or unpin tab |
+| `Ctrl+Shift+\` | Split view with the next tab |
+| `Ctrl+Shift+A` | Archived tabs |
+| `Ctrl+Shift+C` | Copy page address |
+| `Ctrl+Shift+N` | New private tab |
+| `Alt+1`…`Alt+9` | Go to space 1–9 |
+| `Ctrl+Alt+Left` / `Ctrl+Alt+Right` | Previous / next space |
+| `Shift+click` a link | Open it in Peek |
 | `Ctrl+Shift+T` | Reopen closed tab |
 | `Ctrl+Tab` | Next tab |
 | `Ctrl+Shift+Tab` | Previous tab |

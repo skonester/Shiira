@@ -55,7 +55,34 @@ contextBridge.exposeInMainWorld('shiiraAPI', {
     clear: () => ipcRenderer.invoke('session-clear'),
     getWindowCount: () => ipcRenderer.invoke('get-window-count')
   },
-  
+
+  // Spaces, pinned tabs, favorites and archive (Arc-style sidebar)
+  spaces: {
+    load: () => ipcRenderer.invoke('spaces-load'),
+    save: (doc) => ipcRenderer.invoke('spaces-save', doc)
+  },
+
+  // Chrome extensions
+  extensions: {
+    list: () => ipcRenderer.invoke('extensions-list'),
+    uninstall: (id) => ipcRenderer.invoke('extensions-uninstall', id),
+    tabCreated: (requestId, webContentsId) => ipcRenderer.invoke('extensions-tab-created', requestId, webContentsId),
+    tabSelected: (webContentsId) => ipcRenderer.invoke('extensions-tab-selected', webContentsId),
+    decideInstall: (id, ok) => ipcRenderer.invoke('extensions-install-decision', id, ok),
+    onCreateTab: (callback) => ipcRenderer.on('extensions-create-tab', (event, request) => callback(request)),
+    onSelectTab: (callback) => ipcRenderer.on('extensions-select-tab', (event, webContentsId) => callback(webContentsId)),
+    onCloseTab: (callback) => ipcRenderer.on('extensions-close-tab', (event, webContentsId) => callback(webContentsId)),
+    onInstallPrompt: (callback) => ipcRenderer.on('extensions-install-prompt', (event, prompt) => callback(prompt)),
+    onChanged: (callback) => ipcRenderer.on('extensions-changed', () => callback())
+  },
+
+  // Arc import (reads Arc's sidebar file, never changes it)
+  arc: {
+    locate: () => ipcRenderer.invoke('arc-locate'),
+    chooseFile: () => ipcRenderer.invoke('arc-choose-file'),
+    read: (filePath) => ipcRenderer.invoke('arc-read', filePath)
+  },
+
 
   // Chrome Import
   chromeImport: {

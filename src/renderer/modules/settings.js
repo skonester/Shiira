@@ -67,6 +67,20 @@ export const SettingsMixin = {
       localStorage.setItem('shiira-restore-session', String(enabled));
       if (!enabled) await window.shiiraAPI.session.clear();
     });
+    document.getElementById('settings-layout')?.addEventListener('change', event => this.setLayout(event.target.value));
+    document.getElementById('settings-archive-hours')?.addEventListener('change', event => {
+      localStorage.setItem('shiira-archive-hours', event.target.value);
+    });
+    document.getElementById('settings-sleep-minutes')?.addEventListener('change', event => {
+      localStorage.setItem('shiira-sleep-minutes', event.target.value);
+    });
+    document.getElementById('settings-peek')?.addEventListener('change', event => {
+      localStorage.setItem('shiira-peek-links', String(event.target.checked));
+    });
+    document.getElementById('settings-import-arc')?.addEventListener('click', () => {
+      this.hideSettings();
+      this.importFromArc();
+    });
     document.getElementById('settings-search-engine')?.addEventListener('change', event => {
       this.selectSearchEngine(event.target.value);
     });
@@ -88,6 +102,7 @@ export const SettingsMixin = {
     });
     openFromSettings('settings-open-history', this.showHistoryPanel);
     openFromSettings('settings-open-tab-expose', this.showTabExpose);
+    openFromSettings('settings-open-archive', this.showArchivePanel);
     openFromSettings('settings-open-passwords', this.showPasswordAnvil);
     openFromSettings('settings-open-vault', this.showVault);
     const brightness = document.getElementById('settings-brightness');
@@ -176,6 +191,17 @@ export const SettingsMixin = {
     document.getElementById('settings-homepage').value = localStorage.getItem('shiira-homepage-url') || '';
     setStatus('settings-homepage-status', '');
     document.getElementById('settings-restore-session').checked = localStorage.getItem('shiira-restore-session') !== 'false';
+    document.getElementById('settings-layout').value = this.layout || 'sidebar';
+    // Keep custom values (set before these menus existed) selectable.
+    const showChoice = (id, value) => {
+      const select = document.getElementById(id);
+      if (!select) return;
+      if (![...select.options].some(option => option.value === String(value))) select.add(new Option(String(value), String(value)));
+      select.value = String(value);
+    };
+    showChoice('settings-archive-hours', this.getArchiveHours());
+    showChoice('settings-sleep-minutes', this.getSleepMinutes());
+    document.getElementById('settings-peek').checked = this.isPeekEnabled();
     document.getElementById('settings-search-engine').value = this.currentSearchEngine;
     document.getElementById('settings-brightness').value = this.currentBrightness;
     document.getElementById('settings-brightness-value').textContent = `${this.currentBrightness}%`;
@@ -214,6 +240,7 @@ export const SettingsMixin = {
       page.classList.toggle('hidden', page.dataset.settingsPage !== section);
     });
     if (section === 'permissions') void this.renderSitePermissions();
+    if (section === 'extensions') void this.refreshExtensions?.().then(() => this.renderExtensionSettings?.());
   },
 
   searchSettings() {

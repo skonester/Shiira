@@ -57,6 +57,14 @@ Shiira's first-run setup, settings layout, and custom color wheel were adapted f
 
 ---
 
+## Solamar Attribution (GPL-3.0-or-later)
+
+Shiira's Arc-style sidebar follows [Solamar](https://github.com/Bambeek/solamar) by **Bambeek**: spaces, favorites shared by every space, pinned tabs with folders, today tabs that archive themselves, tab sleep, the command bar, split view, Peek, the Arc importer, and Chrome extension support. The Arc sidebar parser (`src/main/arc-importer.js`) and its tests are adapted from Solamar's `arc-parse.ts`, and the extension service (`src/main/extensions-service.js`) from Solamar's `extensions.ts`; the rest was written for Shiira's plain JavaScript `<webview>` renderer. Solamar is licensed GPL-3.0-or-later and is used here under GPL-3.0, Shiira's own license. Solamar's AI agent and Claude Code server are **not** included.
+
+Chrome extensions use [electron-chrome-extensions](https://github.com/samuelmaddock/electron-browser-shell) and [electron-chrome-web-store](https://github.com/samuelmaddock/electron-browser-shell) by Samuel Maddock, both under the MIT License. See [`THIRD_PARTY_NOTICES/solamar-GPL-3.0-NOTICE.txt`](THIRD_PARTY_NOTICES/solamar-GPL-3.0-NOTICE.txt).
+
+---
+
 ## Historical Roots: The Original Shiira Browser
 
 This modern project stands as a dedicated homage to the classic, open-source **Shiira** browser, which was originally developed for Apple's Mac OS X.

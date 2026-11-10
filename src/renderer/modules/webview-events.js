@@ -142,6 +142,10 @@ export const WebviewEventsMixin = {
     
     webview.addEventListener('focus', () => {
       self.closeAllPopups();
+      // Clicking the other half of a split view makes that tab the active one.
+      if (self.splitPair?.includes(tabId) && tabId !== self.activeTabId) {
+        self.switchTab(tabId);
+      }
     });
     
     // Crash and error handling
@@ -179,6 +183,14 @@ export const WebviewEventsMixin = {
     
     // Console message handling for ad blocking and passwords
     webview.addEventListener('console-message', (e) => {
+      if (e.message && e.message.startsWith('[SHIIRA_PEEK_LINK] ')) {
+        const url = e.message.slice('[SHIIRA_PEEK_LINK] '.length).trim();
+        if (/^https?:\/\//i.test(url)) {
+          self.openPeek ? self.openPeek(url) : self.openLinkInTabOnce(url);
+        }
+        return;
+      }
+
       if (e.message && e.message.startsWith('[SHIIRA_OPEN_LINK] ')) {
         const url = e.message.slice('[SHIIRA_OPEN_LINK] '.length).trim();
         if (url && url !== 'about:blank') {
@@ -249,11 +261,14 @@ export const WebviewEventsMixin = {
 
   injectLinkRouting(webview, url) {
     if (!webview || !url || isInternalUrl(url) || url === 'about:blank') return;
+    // Shift+click opens a link in Peek (a preview over the page) unless turned off in Settings.
+    const peekEnabled = this.isPeekEnabled ? this.isPeekEnabled() : false;
 
     const script = `
       (() => {
         if (window.__shiiraLinkRoutingInstalled) return;
         window.__shiiraLinkRoutingInstalled = true;
+        const peekEnabled = ${peekEnabled ? 'true' : 'false'};
 
         const shouldOpenInTab = (event, anchor) => {
           if (!anchor || !anchor.href) return false;
@@ -276,7 +291,9 @@ export const WebviewEventsMixin = {
           if (!shouldOpenInTab(event, anchor)) return;
           event.preventDefault();
           event.stopPropagation();
-          console.log('[SHIIRA_OPEN_LINK] ' + anchor.href);
+          const peek = peekEnabled && event.type === 'click' && event.button === 0 &&
+            event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey;
+          console.log((peek ? '[SHIIRA_PEEK_LINK] ' : '[SHIIRA_OPEN_LINK] ') + anchor.href);
         };
 
         document.addEventListener('click', route, true);

@@ -33,6 +33,9 @@ const PrivacyService = require('./privacy-service');
 const BrowserSettings = require('./browser-settings');
 const DnsShield = require('./dns-shield');
 const VaultService = require('./vault-service');
+const SpacesService = require('./spaces-service');
+const ExtensionsService = require('./extensions-service');
+const arcImporter = require('./arc-importer');
 const { getAdBlocker, getCosmeticInjector, getScriptInjector } = require('./ad-blocker');
 
 // Initialize Chrome Importer
@@ -50,6 +53,10 @@ const bookmarksService = new BookmarksService();
 // Initialize Privacy Service
 const privacyService = new PrivacyService();
 const browserSettings = new BrowserSettings();
+const spacesService = new SpacesService();
+const extensionsService = new ExtensionsService();
+// Arc sidebar files the user found or picked; the renderer may only read these.
+const allowedArcFiles = new Set();
 
 // Initialize Shield (encrypted DNS / DNS-over-HTTPS)
 const dnsShield = new DnsShield();
@@ -364,8 +371,17 @@ function handleKeyboardShortcut(event, input, targetWindow) {
   
   // Define shortcuts that should be handled by the browser UI
   let shortcut = null;
-  
-  if (ctrl && !shift && key === 't') shortcut = 'new-tab';
+
+  if (ctrl && alt && !shift && key === 'arrowright') shortcut = 'next-space';
+  else if (ctrl && alt && !shift && key === 'arrowleft') shortcut = 'prev-space';
+  else if (alt && !ctrl && !shift && /^[1-9]$/.test(key)) shortcut = `space-${key}`;
+  else if (ctrl && !shift && !alt && key === 's') shortcut = 'toggle-sidebar';
+  else if (ctrl && !shift && !alt && key === 'd') shortcut = 'pin-tab';
+  else if (ctrl && shift && (key === '\\' || key === '|')) shortcut = 'split-view';
+  else if (ctrl && shift && key === 'a') shortcut = 'archive';
+  else if (ctrl && shift && key === 'c') shortcut = 'copy-url';
+  else if (ctrl && shift && key === 'n') shortcut = 'private-tab';
+  else if (ctrl && !shift && key === 't') shortcut = 'new-tab';
   else if (ctrl && !shift && key === 'w') shortcut = 'close-tab';
   else if (ctrl && shift && key === 't') shortcut = 'reopen-tab';
   else if (ctrl && !shift && key === 'tab') shortcut = 'next-tab';
@@ -800,6 +816,7 @@ function createWindow() {
 
   // Track this window
   browserWindows.add(mainWindow);
+  extensionsService.watchWindow(mainWindow);
   console.log('[Session] Window opened. Total windows:', browserWindows.size);
 
   mainWindow.on('closed', () => {
@@ -821,6 +838,7 @@ function createWindow() {
 // App lifecycle
 app.whenReady().then(async () => {
   browserSettings.initialize(path.join(app.getPath('userData'), 'browser-settings.json'));
+  spacesService.initialize(path.join(app.getPath('userData'), 'spaces.json'));
   // Wait for Widevine CDM to be ready (Castlabs Electron for DRM support)
   // NOTE: Skipping components.whenReady() due to crash in Castlabs v39
   // The CDM will still be downloaded/updated automatically in the background
@@ -843,6 +861,15 @@ app.whenReady().then(async () => {
     const url = request.url.replace('shiira-asset://', '');
     const filePath = getAssetPath(url);
     callback({ path: filePath });
+  });
+
+  // Chrome extensions must be ready before the first tab's webview attaches.
+  extensionsService.initialize({
+    getWindow: () => {
+      const focused = BrowserWindow.getFocusedWindow();
+      if (focused && browserWindows.has(focused)) return focused;
+      return mainWindow && !mainWindow.isDestroyed() ? mainWindow : [...browserWindows][0] || null;
+    }
   });
 
   // Show the window immediately so the app feels responsive.
@@ -1029,6 +1056,7 @@ ipcMain.handle('create-new-window', (event, url) => {
   
   // Track this window
   browserWindows.add(newWindow);
+  extensionsService.watchWindow(newWindow);
   console.log('[Session] New window opened. Total windows:', browserWindows.size);
   
   newWindow.on('closed', () => {
@@ -1229,6 +1257,44 @@ ipcMain.handle('downloads-open-directory', async () => {
   const directory = downloadFolder();
   const error = await shell.openPath(directory);
   return error ? { success: false, error } : { success: true };
+});
+
+// Spaces, pinned tabs, favorites and archive (Arc-style sidebar)
+ipcMain.handle('spaces-load', () => spacesService.load());
+ipcMain.handle('spaces-save', (event, doc) => spacesService.save(doc));
+
+// Arc import: Arc's files are only read. The renderer can only read a file the user found or picked here.
+function arcPreview(filePath) {
+  try {
+    const plan = arcImporter.readArcPlan(filePath);
+    allowedArcFiles.add(filePath);
+    return { found: true, path: filePath, summary: arcImporter.summarizePlan(plan) };
+  } catch (error) {
+    return { found: true, path: filePath, error: error.message };
+  }
+}
+
+ipcMain.handle('arc-locate', () => {
+  const filePath = arcImporter.locateArcSidebar();
+  return filePath ? arcPreview(filePath) : { found: false };
+});
+ipcMain.handle('arc-choose-file', async (event) => {
+  const ownerWindow = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showOpenDialog(ownerWindow || undefined, {
+    title: 'Choose Arc’s StorableSidebar.json',
+    filters: [{ name: 'Arc sidebar', extensions: ['json'] }],
+    properties: ['openFile']
+  });
+  if (result.canceled || !result.filePaths[0]) return { canceled: true };
+  return arcPreview(result.filePaths[0]);
+});
+ipcMain.handle('arc-read', (event, filePath) => {
+  if (!allowedArcFiles.has(filePath)) return { success: false, error: 'Choose the Arc sidebar file first.' };
+  try {
+    return { success: true, plan: arcImporter.readArcPlan(filePath) };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 });
 
 // Shield (Encrypted DNS) IPC Handlers

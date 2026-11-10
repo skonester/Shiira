@@ -1,0 +1,31 @@
+Solamar
+https://github.com/Bambeek/solamar
+Copyright (C) Bambeek and Solamar contributors
+
+Solamar is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version.
+
+Shiira uses parts of Solamar under GPL-3.0, the version Shiira itself is
+licensed under (see LICENSE). The full license text is at
+https://www.gnu.org/licenses/gpl-3.0.txt.
+
+Code adapted from Solamar in Shiira:
+
+- src/main/arc-importer.js: Arc StorableSidebar.json parser, adapted from
+  Solamar's src/main/arc-parse.ts and src/main/arc-import.ts.
+- tests/arc-importer.test.js and tests/fixtures/arc-sidebar.json: adapted
+  from Solamar's tests/arc-parse.test.ts and its fixture.
+- src/main/extensions-service.js and src/renderer/modules/extensions.js:
+  Chrome extension support, adapted from Solamar's src/main/extensions.ts
+  and src/renderer/src/ExtensionsUI.tsx.
+
+Features designed after Solamar and written for Shiira's renderer:
+spaces, favorites, pinned tabs with folders, today tabs with automatic
+archiving, tab sleep, the command bar, split view and Peek
+(src/renderer/modules/sidebar.js, spaces-model.js, command-bar.js,
+split-peek.js, src/main/spaces-service.js, src/renderer/sidebar.css).
+
+This software is distributed WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
