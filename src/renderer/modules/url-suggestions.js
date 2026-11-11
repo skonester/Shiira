@@ -164,7 +164,7 @@ export const UrlSuggestionsMixin = {
       const isHistory = s.type === 'history';
       const rightIcon = isHistory 
         ? 'shiira-asset://ui-icons/history.svg'
-        : this.currentSearchEngine === 'scira' ? 'shiira-asset://site-logos/scira.svg' : this.currentSearchEngine === 'brave' ? 'shiira-asset://site-logos/brave-search.svg' : 'shiira-asset://ui-icons/search.svg';
+        : this.currentSearchEngine === 'scira' ? 'shiira-asset://site-logos/scira.svg' : this.currentSearchEngine === 'brave' ? 'shiira-asset://site-logos/brave-search.svg' : 'shiira-asset://site-logos/duckduckgo.svg';
       const iconClass = isHistory ? 'history' : 'search';
       
       html += `

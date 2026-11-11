@@ -23,23 +23,43 @@ jobs:
             build-script: build:win
           - os: macos-latest
             build-script: build:mac
-          - os: ubuntu-latest
+          # Keep the Linux release environment stable during the Ubuntu 26 rollout.
+          - os: ubuntu-24.04
             build-script: build:linux
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
         run: npm ci
+        env:
+          # The Git dependency also runs Electron's installer while npm prepares
+          # it. Download separately so upstream failures can be retried cleanly.
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+      - name: Download Castlabs Electron
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4; do
+            if node node_modules/electron/install.js; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 4 ]; then
+              echo "Electron download failed (attempt $attempt/4). Retrying..."
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "Electron download failed after 4 attempts."
+          exit 1
 
       - name: Build and publish
         run: npm run ${{ matrix.build-script }} -- --publish always

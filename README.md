@@ -113,6 +113,8 @@ Visit the **[Releases](https://github.com/skonester/Shiira/releases)** page to d
 
 ### Run from source
 
+Use Node.js 22.12.0 or newer. The `.nvmrc` file selects Node 22, matching the release workflow.
+
 ```bash
 git clone https://github.com/skonester/Shiira.git
 cd Shiira

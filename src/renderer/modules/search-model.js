@@ -1,7 +1,7 @@
 export const SEARCH_ENGINES = {
   brave: { label: 'Brave Search', logo: 'shiira-asset://site-logos/brave-search.svg' },
   scira: { label: 'Scira AI', logo: 'shiira-asset://site-logos/scira.svg' },
-  duckduckgo: { label: 'DuckDuckGo Quick', logo: 'shiira-asset://ui-icons/search.svg' }
+  duckduckgo: { label: 'DuckDuckGo Quick', logo: 'shiira-asset://site-logos/duckduckgo.svg' }
 };
 
 export function normalizeSearchEngine(engine) {
