@@ -31,6 +31,7 @@ export const UrlSuggestionsMixin = {
    */
   handleUrlInputChange() {
     const input = this.urlInput.value;
+    this.suggestionRequest = (this.suggestionRequest || 0) + 1;
     
     // Clear any existing debounce timer
     if (this.suggestionDebounceTimer) {
@@ -62,47 +63,18 @@ export const UrlSuggestionsMixin = {
     // Get history suggestions
     const historySuggestions = this.getHistorySuggestions(query);
     
-    // Get search suggestions from Startpage
-    let searchSuggestions = [];
+    const request = this.suggestionRequest = (this.suggestionRequest || 0) + 1;
+    const provider = this.currentSearchEngine;
+    const active = this.tabs?.find(tab => tab.id === this.activeTabId);
+    let online = [];
     try {
-      const response = await fetch(
-        `https://www.startpage.com/osuggestions?q=${encodeURIComponent(query)}`
-      );
-      const data = await response.json();
-      if (data && data[1]) {
-        searchSuggestions = data[1].slice(0, 5).map(s => ({
-          type: 'search',
-          text: s,
-          url: `https://www.startpage.com/sp/search?query=${encodeURIComponent(s)}`
-        }));
-      }
-    } catch (e) {
-      // Ignore search suggestion errors
-    }
-    
-    // Get AI-powered suggestions from Scira
-    let sciraSuggestions = [];
-    try {
-      const sciraResponse = await fetch(
-        `https://scira.ai/api/suggest?q=${encodeURIComponent(query)}`,
-        { signal: AbortSignal.timeout(1000) }
-      );
-      if (sciraResponse.ok) {
-        const sciraData = await sciraResponse.json();
-        if (sciraData && sciraData.suggestions) {
-          sciraSuggestions = sciraData.suggestions.slice(0, 3).map(s => ({
-            type: 'ai',
-            text: s,
-            url: `https://scira.ai/?q=${encodeURIComponent(s)}`
-          }));
-        }
-      }
-    } catch (e) {
-      // Ignore Scira suggestion errors
-    }
-    
-    // Combine and dedupe suggestions (AI first, then search, then history)
-    this.suggestions = [...sciraSuggestions, ...searchSuggestions, ...historySuggestions].slice(0, 8);
+      if (!active?.privateMode) online = await window.shiiraAPI.getUrlSuggestions(query, provider);
+    } catch { /* Local history remains available offline. */ }
+    if (request !== this.suggestionRequest) return;
+    const searchSuggestions = (Array.isArray(online) ? online : []).map(value => ({
+      type: 'search', text: value, url: this.buildSearchUrl(value)
+    }));
+    this.suggestions = [...historySuggestions, ...searchSuggestions].slice(0, 8);
     this.selectedSuggestionIndex = -1;
     this.renderSuggestions();
   },
@@ -188,12 +160,12 @@ export const UrlSuggestionsMixin = {
                onerror="this.src='shiira-asset://ui-icons/globe.svg'">`
         : '';
       
-      // Right icon: type indicator (Startpage or History)
+      // Right icon: type indicator (search provider or history)
       const isHistory = s.type === 'history';
       const rightIcon = isHistory 
         ? 'shiira-asset://ui-icons/history.svg'
-        : 'shiira-asset://site-logos/Startpage.com_logo.svg';
-      const iconClass = isHistory ? 'history' : 'startpage';
+        : this.currentSearchEngine === 'scira' ? 'shiira-asset://site-logos/scira.svg' : this.currentSearchEngine === 'brave' ? 'shiira-asset://site-logos/brave-search.svg' : 'shiira-asset://ui-icons/search.svg';
+      const iconClass = isHistory ? 'history' : 'search';
       
       html += `
         <div class="url-suggestion ${isSelected ? 'selected' : ''}" data-index="${i}">
@@ -268,6 +240,7 @@ export const UrlSuggestionsMixin = {
    * Hide suggestions dropdown
    */
   hideSuggestions() {
+    this.suggestionRequest = (this.suggestionRequest || 0) + 1;
     this.urlSuggestions.classList.add('hidden');
     this.suggestions = [];
     this.selectedSuggestionIndex = -1;

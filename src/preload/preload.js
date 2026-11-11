@@ -80,7 +80,7 @@ contextBridge.exposeInMainWorld('shiiraAPI', {
   arc: {
     locate: () => ipcRenderer.invoke('arc-locate'),
     chooseFile: () => ipcRenderer.invoke('arc-choose-file'),
-    read: (filePath) => ipcRenderer.invoke('arc-read', filePath)
+    read: (filePath, options) => ipcRenderer.invoke('arc-read', filePath, options)
   },
 
 
@@ -153,7 +153,13 @@ contextBridge.exposeInMainWorld('shiiraAPI', {
   },
   
   // URL Autocomplete
-  getUrlSuggestions: (query) => ipcRenderer.invoke('get-url-suggestions', query),
+  getUrlSuggestions: (query, provider) => ipcRenderer.invoke('get-url-suggestions', query, provider),
+  search: {
+    status: () => ipcRenderer.invoke('search-status'),
+    setKey: (provider, key) => ipcRenderer.invoke('search-set-key', provider, key),
+    query: (request) => ipcRenderer.invoke('search-query', request),
+    cancel: (id) => ipcRenderer.invoke('search-cancel', id)
+  },
   
   // Auto-updater
   updates: {

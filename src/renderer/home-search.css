@@ -1,0 +1,67 @@
+/* Search remains inside the home tab; the page scrolls as results grow. */
+.search-box { width: min(560px, 90vw); max-width: 100%; }
+.search-box input { width: 100%; max-width: 100%; padding-right: 86px; }
+.search-box input::-webkit-search-cancel-button { display: none; }
+.search-box-logo { right: 54px; }
+.home-search-submit {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-primary);
+  background: rgba(var(--accent-rgb), 0.12);
+  cursor: pointer;
+  font-size: 19px;
+}
+.home-search-submit:hover { border-color: var(--accent); }
+.home-search-scope { margin-top: 12px; display: flex; justify-content: center; align-items: center; gap: 10px; color: var(--text-secondary); font-size: 12px; }
+.home-search-scope select {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+.welcome.has-search-results { align-items: flex-start; overflow-y: auto; }
+.welcome.has-search-results .welcome-content { width: min(760px, calc(100% - 32px)); padding: 28px 0 48px; }
+.welcome.has-search-results .shiira-brand-logo,
+.welcome.has-search-results .shiira-logo,
+.welcome.has-search-results .welcome-title,
+.welcome.has-search-results .welcome-copy { display: none; }
+.welcome.has-search-results .ai-search-results { width: 100%; max-width: 100%; box-sizing: border-box; text-align: left; }
+.home-search-message,
+.home-search-note { margin: 10px 0 14px; }
+.home-search-note { font-size: 12px; }
+.home-search-answer { color: var(--text-primary); line-height: 1.75; overflow-wrap: anywhere; }
+.home-search-answer p { white-space: pre-wrap; margin: 0 0 14px; }
+.home-search-answer h3 { font-size: 17px; margin: 12px 0; }
+.home-search-result { padding: 16px 0; border-top: 1px solid rgba(var(--accent-rgb), 0.14); overflow-wrap: anywhere; }
+.home-search-result small { display: block; color: var(--text-secondary); font-size: 11px; margin-bottom: 4px; }
+.home-search-result a { display: block; font-size: 16px; font-weight: 500; line-height: 1.45; }
+.home-search-result p { margin: 6px 0 0; font-size: 13px; line-height: 1.65; }
+.home-search-action {
+  display: inline-block;
+  margin: 10px 8px 0 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  background: rgba(var(--accent-rgb), 0.1);
+  cursor: pointer;
+}
+.home-search-action:hover { border-color: var(--accent); }
+.home-search-action:focus-visible,
+.home-search-submit:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.settings-group input[type="password"] { width: min(100%, 430px); box-sizing: border-box; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary); }
+.settings-group input[type="password"]:focus { outline: 1px solid var(--accent); }
+.settings-group a { color: var(--accent); }
+@media (max-width: 600px) {
+  .welcome.has-search-results .welcome-content { padding-top: 18px; }
+  .welcome.has-search-results .ai-search-results { padding: 12px; }
+  .search-engine-chips { gap: 5px; }
+  .search-engine-chip { font-size: 11px; padding: 0 8px; }
+}

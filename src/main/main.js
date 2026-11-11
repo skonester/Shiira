@@ -5,7 +5,6 @@ try {
 }
 
 const { app, BrowserWindow, ipcMain, session, protocol, nativeImage, Menu, dialog, clipboard, shell, net } = require('electron');
-const { LRUCache } = require('lru-cache');
 
 // Try to import components for Castlabs Electron (Widevine DRM support)
 let components = null;
@@ -36,6 +35,8 @@ const VaultService = require('./vault-service');
 const SpacesService = require('./spaces-service');
 const ExtensionsService = require('./extensions-service');
 const arcImporter = require('./arc-importer');
+const { SearchService } = require('./search-service');
+const searchService = new SearchService({ keychain: require('keytar') });
 const { getAdBlocker, getCosmeticInjector, getScriptInjector } = require('./ad-blocker');
 
 // Initialize Chrome Importer
@@ -74,7 +75,6 @@ const cosmeticInjector = getCosmeticInjector();
 const scriptInjector = getScriptInjector();
 
 let darkReaderScriptCache = null;
-const suggestionCache = new LRUCache({ max: 256, ttl: 1000 * 60 * 10 });
 const pendingDownloads = new WeakMap();
 const activeDownloadPaths = new Set();
 const browserHeaderSessions = new WeakSet();
@@ -117,9 +117,6 @@ function preconnectBrowserSession(sessionInstance) {
   if (typeof sessionInstance.preconnect !== 'function') return;
 
   [
-    'https://www.startpage.com',
-    'https://search.brave.com',
-    'https://scira.ai',
     'https://api.duckduckgo.com',
     'https://en.wikipedia.org',
     'https://www.reddit.com',
@@ -546,7 +543,7 @@ const SHIIRA_CONFIG = {
   name: 'Shiira',
   version: require('../../package.json').version,
   company: 'Shiira Project',
-  homepage: 'https://www.startpage.com',
+  homepage: 'shiira://home',
   userAgent: null // Will be set dynamically
 };
 
@@ -1267,8 +1264,9 @@ ipcMain.handle('spaces-save', (event, doc) => spacesService.save(doc));
 function arcPreview(filePath) {
   try {
     const plan = arcImporter.readArcPlan(filePath);
-    allowedArcFiles.add(filePath);
-    return { found: true, path: filePath, summary: arcImporter.summarizePlan(plan) };
+    const source = arcImporter.resolveArcSource(filePath).sidebarFile;
+    allowedArcFiles.add(source);
+    return { found: true, path: source, summary: arcImporter.summarizePlan(plan) };
   } catch (error) {
     return { found: true, path: filePath, error: error.message };
   }
@@ -1280,18 +1278,28 @@ ipcMain.handle('arc-locate', () => {
 });
 ipcMain.handle('arc-choose-file', async (event) => {
   const ownerWindow = BrowserWindow.fromWebContents(event.sender);
+  const detected = arcImporter.locateArcSidebar();
+  const buttons = [...(detected ? ['Use Detected Arc Data'] : []), 'Choose Arc Folder…', 'Choose Sidebar File…', 'Cancel'];
+  const choice = await dialog.showMessageBox(ownerWindow || undefined, {
+    type: 'question', title: 'Import from Arc', message: 'Where is your Arc data?',
+    detail: `${detected ? `Found ${detected}\n\n` : ''}Choose the Arc folder to include its archive, cached icons and browsing history, or choose StorableSidebar.json alone. A folder copied from another computer works too. Quit Arc first for the most complete result.`,
+    buttons, defaultId: 0, cancelId: buttons.length - 1
+  });
+  if (choice.response === buttons.length - 1) return { canceled: true };
+  if (detected && choice.response === 0) return arcPreview(detected);
+  const folder = choice.response === (detected ? 1 : 0);
   const result = await dialog.showOpenDialog(ownerWindow || undefined, {
-    title: 'Choose Arc’s StorableSidebar.json',
-    filters: [{ name: 'Arc sidebar', extensions: ['json'] }],
-    properties: ['openFile']
+    title: folder ? 'Choose the Arc data folder' : 'Choose Arc’s StorableSidebar.json',
+    ...(folder ? {} : { filters: [{ name: 'Arc sidebar', extensions: ['json'] }] }),
+    properties: [folder ? 'openDirectory' : 'openFile', 'showHiddenFiles']
   });
   if (result.canceled || !result.filePaths[0]) return { canceled: true };
   return arcPreview(result.filePaths[0]);
 });
-ipcMain.handle('arc-read', (event, filePath) => {
+ipcMain.handle('arc-read', (event, filePath, options = {}) => {
   if (!allowedArcFiles.has(filePath)) return { success: false, error: 'Choose the Arc sidebar file first.' };
   try {
-    return { success: true, plan: arcImporter.readArcPlan(filePath) };
+    return { success: true, plan: arcImporter.readArcPlan(filePath, { includeHistory: options?.includeHistory === true }) };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1470,50 +1478,31 @@ ipcMain.handle('bookmarks-delete-icon', (event, bookmarkId) => {
   return bookmarksService.deleteCustomIcon(bookmarkId);
 });
 
-// URL Autocomplete IPC handler
-ipcMain.handle('get-url-suggestions', async (event, query) => {
-  // Check privacy setting
-  if (!privacyService.isUrlSuggestionsEnabled()) {
-    return [];
+// Search credentials and API requests are available only to the browser chrome,
+// never to websites or extension pages sharing its preload bridge.
+function isSearchSender(event) {
+  const { pathToFileURL } = require('url');
+  const expected = pathToFileURL(path.join(__dirname, '../renderer/index.html')).href;
+  return event.senderFrame === event.sender.mainFrame && event.senderFrame?.url === expected;
+}
+ipcMain.handle('search-status', event => isSearchSender(event) ? searchService.status() : {});
+ipcMain.handle('search-set-key', (event, provider, key) => isSearchSender(event) ? searchService.setKey(provider, key) : { success: false, error: 'Unavailable.' });
+const searchOwners = new Set();
+ipcMain.handle('search-query', (event, request) => {
+  if (!isSearchSender(event)) return { success: false, error: 'Unavailable.' };
+  const owner = event.sender.id;
+  if (!searchOwners.has(owner)) {
+    searchOwners.add(owner);
+    event.sender.once('destroyed', () => { searchService.cancelOwner(owner); searchOwners.delete(owner); });
   }
-  
-  try {
-    const https = require('https');
-    const normalizedQuery = String(query || '').trim().toLowerCase();
-    const cachedSuggestions = suggestionCache.get(normalizedQuery);
-    if (cachedSuggestions) {
-      return cachedSuggestions;
-    }
-
-    const url = `https://www.startpage.com/osuggestions?q=${encodeURIComponent(query)}`;
-    
-    return new Promise((resolve, reject) => {
-      https.get(url, (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => {
-          try {
-            const parsed = JSON.parse(data);
-            const suggestions = parsed[1] || [];
-            suggestionCache.set(normalizedQuery, suggestions);
-            resolve(suggestions);
-          } catch (e) {
-            resolve([]);
-          }
-        });
-      }).on('error', (e) => {
-        if (!app.isPackaged) {
-          console.error('[Suggestions] Fetch error:', e);
-        }
-        resolve([]);
-      });
-    });
-  } catch (e) {
-    if (!app.isPackaged) {
-      console.error('[Suggestions] Error:', e);
-    }
-    return [];
-  }
+  return searchService.search(owner, request);
+});
+ipcMain.handle('search-cancel', (event, id) => {
+  if (isSearchSender(event) && typeof id === 'string') searchService.cancel(event.sender.id, id);
+});
+ipcMain.handle('get-url-suggestions', async (event, query, provider) => {
+  if (!isSearchSender(event) || !privacyService.isUrlSuggestionsEnabled() || privacyService.getSuggestionsProvider() === 'none') return [];
+  return searchService.suggest(query, provider);
 });
 
 // Password Manager IPC Handlers

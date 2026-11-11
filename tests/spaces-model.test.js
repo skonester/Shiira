@@ -100,3 +100,28 @@ test('letter icons and shades are stable', async () => {
   assert.equal(shade('#ffffff', -1), '#000000');
   assert.equal(hostOf('not a url'), '');
 });
+
+test('Arc migration keeps custom titles, file URLs, icons, archive space links and unique names', async () => {
+  const { planFromArc } = await load();
+  let n = 0;
+  const result = planFromArc({
+    spaces: [{ id: 'old', title: 'Work', pinned: [{ kind: 'tab', url: 'file:///C:/docs/index.html', title: 'My docs', customTitle: 'My docs', favicon: 'data:image/png;base64,icon', lastActiveAt: 50 }], today: [] }],
+    favorites: [], focusedSpaceId: 'old', archive: [{ url: 'https://archived.example/', title: 'Archived', spaceArcId: 'old', archivedAt: 100 }]
+  }, { existingSpaces: [{ title: 'Work' }, { title: 'Work (Arc)' }], makeId: prefix => `${prefix}${++n}` });
+  assert.equal(result.spaces[0].title, 'Work (Arc 2)');
+  assert.equal(result.tabs[0].customTitle, 'My docs');
+  assert.equal(result.tabs[0].pinnedUrl, 'file:///C:/docs/index.html');
+  assert.equal(result.tabs[0].lastActiveAt, 50);
+  assert.equal(result.tabs[0].favicon, 'data:image/png;base64,icon');
+  assert.equal(result.archive[0].spaceId, result.spaces[0].id);
+  assert.equal(result.focusedSpaceId, result.spaces[0].id);
+});
+
+test('history merge deduplicates repeat imports and keeps newest visits within the limit', async () => {
+  const { mergeImportedHistory } = await load();
+  const visit = (url, timestamp) => ({ url, timestamp });
+  const incoming = [visit('https://one.example/', 1), visit('https://two.example/', 2), visit('https://three.example/', 3)];
+  const once = mergeImportedHistory([], incoming);
+  assert.deepEqual(mergeImportedHistory(once, incoming), once);
+  assert.deepEqual(mergeImportedHistory(once, [visit('javascript:x', 4)], 2).map(v => v.timestamp), [2, 3]);
+});

@@ -147,14 +147,17 @@ export function planFromArc(plan, { existingSpaces = [], existingFavoriteUrls = 
   const spaces = [];
   const folders = [];
   const tabs = [];
+  const spaceIds = new Map();
   let position = Math.max(-1, ...existingSpaces.map((space) => space.position ?? 0)) + 1;
   const taken = new Set(existingSpaces.map((space) => space.title));
 
   const add = (nodes, spaceId, section, parentId) => {
     nodes.forEach((node, index) => {
       if (node.kind === 'tab') {
-        if (!/^https?:/i.test(node.url || '')) return;
-        tabs.push({ itemId: makeId('i-'), spaceId, section, parentId, url: node.url, title: node.title || '', position: index });
+        if (!/^(https?|file):/i.test(node.url || '')) return;
+        tabs.push({ itemId: makeId('i-'), spaceId, section, parentId, url: node.url, title: node.title || '',
+          customTitle: node.customTitle || '', favicon: node.favicon || null,
+          lastActiveAt: node.lastActiveAt, pinnedUrl: section === 'today' ? null : node.url, position: index });
       } else {
         const folderId = makeId('f-');
         folders.push({ id: folderId, spaceId, parentId, title: node.title || 'Folder', collapsed: false, position: index });
@@ -165,8 +168,15 @@ export function planFromArc(plan, { existingSpaces = [], existingFavoriteUrls = 
 
   (plan?.spaces || []).forEach((arcSpace, index) => {
     const spaceId = makeId('s-');
-    const title = taken.has(arcSpace.title) ? `${arcSpace.title} (Arc)` : arcSpace.title;
+    const base = String(arcSpace.title || 'Space').slice(0, 45);
+    let title = base;
+    let suffix = 1;
+    while (taken.has(title)) {
+      title = `${base} (Arc${suffix === 1 ? '' : ` ${suffix}`})`;
+      suffix++;
+    }
     taken.add(title);
+    spaceIds.set(arcSpace.id, spaceId);
     spaces.push({
       id: spaceId,
       title: String(title || 'Space').slice(0, 60),
@@ -187,10 +197,26 @@ export function planFromArc(plan, { existingSpaces = [], existingFavoriteUrls = 
   const haveFavorite = new Set(existingFavoriteUrls);
   let favoritePosition = existingFavoriteUrls.length;
   for (const favorite of plan?.favorites || []) {
-    if (!/^https?:/i.test(favorite.url || '') || haveFavorite.has(favorite.url)) continue;
+    if (!/^(https?|file):/i.test(favorite.url || '') || haveFavorite.has(favorite.url)) continue;
     haveFavorite.add(favorite.url);
-    tabs.push({ itemId: makeId('i-'), spaceId: null, section: 'favorites', parentId: null, url: favorite.url, title: favorite.title || '', position: favoritePosition++ });
+    tabs.push({ itemId: makeId('i-'), spaceId: null, section: 'favorites', parentId: null, url: favorite.url,
+      title: favorite.title || '', customTitle: favorite.customTitle || '', favicon: favorite.favicon || null,
+      pinnedUrl: favorite.url, lastActiveAt: favorite.lastActiveAt, position: favoritePosition++ });
   }
 
-  return { spaces, folders, tabs };
+  const archive = (plan?.archive || []).filter((entry) => /^(https?|file):/i.test(entry.url || '')).map((entry) => ({
+    url: entry.url, title: entry.title || entry.url, archivedAt: entry.archivedAt,
+    spaceId: spaceIds.get(entry.spaceArcId) || spaces[0]?.id || null
+  }));
+  return { spaces, folders, tabs, archive, focusedSpaceId: spaceIds.get(plan?.focusedSpaceId) || spaces[0]?.id };
+}
+
+/** Keep the most recent occurrence of each visit, in Shiira's oldest-first order. */
+export function mergeImportedHistory(existing, incoming, limit = 1000) {
+  const visits = new Map();
+  for (const entry of [...existing, ...incoming]) {
+    if (!/^(https?|file):/i.test(entry?.url || '') || !Number.isFinite(entry.timestamp)) continue;
+    visits.set(`${entry.url}\n${entry.timestamp}`, entry);
+  }
+  return [...visits.values()].sort((a, b) => a.timestamp - b.timestamp).slice(-limit);
 }

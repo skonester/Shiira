@@ -1,0 +1,29 @@
+YARC (Yet Another Arc Clone / Arc Shell)
+https://github.com/yenebeb/arc-shell
+Copyright (C) YARC contributors
+
+YARC is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. Shiira uses the adapted portions under GPL-3.0, consistent with
+Shiira's GPL-3.0-only license. The full license accompanies this notice in
+GPL-3.0.txt.
+
+Adapted from the user's local yarc-main source snapshot:
+
+- src/main/arc-importer.js: Arc sidebar format handling, archive parsing,
+  named icons, source resolution, cached favicons and read-only history
+  migration, adapted from src/main/importers/arc-sidebar.ts, index.ts and
+  chromium.ts.
+- src/renderer/modules/site-search.js: site search table and matching,
+  adapted from src/shared/site-search.ts.
+- tests/fixtures/yarc-arc-sidebar.json: the sanitized sample from
+  docs/fixtures/StorableSidebar.sample.json.
+
+Behavioral references implemented for Shiira's own renderer: command bar
+archive results, matching-tab priority, Shift+Enter split view, and Peek
+for links to other hosts from pinned tabs and favorites.
+
+This software is distributed WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for details.

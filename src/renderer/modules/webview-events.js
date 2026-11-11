@@ -2,6 +2,7 @@
 // Handles webview event setup and content script injection coordination
 
 import { isInternalUrl, getDomain } from './utils.js';
+import { linkRoutingScript } from './link-routing.js';
 
 export const WebviewEventsMixin = {
   setupWebviewEvents(webview, tabId) {
@@ -132,7 +133,7 @@ export const WebviewEventsMixin = {
       e.preventDefault?.();
       
       if (e.url && e.url !== 'about:blank') {
-        self.openLinkInTabOnce(e.url);
+        self.openLinkInTabOnce(e.url, tabId);
       }
     });
     
@@ -186,7 +187,7 @@ export const WebviewEventsMixin = {
       if (e.message && e.message.startsWith('[SHIIRA_PEEK_LINK] ')) {
         const url = e.message.slice('[SHIIRA_PEEK_LINK] '.length).trim();
         if (/^https?:\/\//i.test(url)) {
-          self.openPeek ? self.openPeek(url) : self.openLinkInTabOnce(url);
+          self.openPeek ? self.openPeek(url, tabId) : self.openLinkInTabOnce(url, tabId);
         }
         return;
       }
@@ -194,7 +195,7 @@ export const WebviewEventsMixin = {
       if (e.message && e.message.startsWith('[SHIIRA_OPEN_LINK] ')) {
         const url = e.message.slice('[SHIIRA_OPEN_LINK] '.length).trim();
         if (url && url !== 'about:blank') {
-          self.openLinkInTabOnce(url);
+          self.openLinkInTabOnce(url, tabId);
         }
         return;
       }
@@ -236,7 +237,7 @@ export const WebviewEventsMixin = {
     }, { once: true });
   },
 
-  openLinkInTabOnce(url) {
+  openLinkInTabOnce(url, sourceTabId = this.activeTabId) {
     if (!url || url === 'about:blank') return;
 
     const now = Date.now();
@@ -250,56 +251,22 @@ export const WebviewEventsMixin = {
       }
     }
 
-    const previous = this._recentlyOpenedLinks.get(url);
+    const source = this.tabs.find(tab => tab.id === sourceTabId);
+    const key = `${sourceTabId}\n${url}`;
+    const previous = this._recentlyOpenedLinks.get(key);
     if (previous && now - previous < 1000) {
       return;
     }
 
-    this._recentlyOpenedLinks.set(url, now);
-    this.createTab(url);
+    this._recentlyOpenedLinks.set(key, now);
+    this.createTab(url, { spaceId: source?.spaceId || this.focusedSpaceId, privateMode: source?.privateMode === true });
   },
 
   injectLinkRouting(webview, url) {
     if (!webview || !url || isInternalUrl(url) || url === 'about:blank') return;
-    // Shift+click opens a link in Peek (a preview over the page) unless turned off in Settings.
-    const peekEnabled = this.isPeekEnabled ? this.isPeekEnabled() : false;
-
-    const script = `
-      (() => {
-        if (window.__shiiraLinkRoutingInstalled) return;
-        window.__shiiraLinkRoutingInstalled = true;
-        const peekEnabled = ${peekEnabled ? 'true' : 'false'};
-
-        const shouldOpenInTab = (event, anchor) => {
-          if (!anchor || !anchor.href) return false;
-          const href = anchor.href;
-          if (!/^https?:\\/\\//i.test(href)) return false;
-          const target = (anchor.getAttribute('target') || '').toLowerCase();
-          const rel = (anchor.getAttribute('rel') || '').toLowerCase();
-          return event.type === 'auxclick' ||
-            event.button === 1 ||
-            event.metaKey ||
-            event.ctrlKey ||
-            event.shiftKey ||
-            target === '_blank' ||
-            target === 'blank' ||
-            rel.includes('external');
-        };
-
-        const route = event => {
-          const anchor = event.target?.closest?.('a[href]');
-          if (!shouldOpenInTab(event, anchor)) return;
-          event.preventDefault();
-          event.stopPropagation();
-          const peek = peekEnabled && event.type === 'click' && event.button === 0 &&
-            event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey;
-          console.log((peek ? '[SHIIRA_PEEK_LINK] ' : '[SHIIRA_OPEN_LINK] ') + anchor.href);
-        };
-
-        document.addEventListener('click', route, true);
-        document.addEventListener('auxclick', route, true);
-      })();
-    `;
+    const tab = this.tabs.find(tab => tab.webview === webview);
+    const script = linkRoutingScript({ peekEnabled: this.isPeekEnabled?.() === true,
+      pinned: tab?.section === 'pinned' || tab?.section === 'favorites' });
 
     webview.executeJavaScript(script, true).catch(error => {
       console.warn('[Webview] Failed to inject link routing:', error);

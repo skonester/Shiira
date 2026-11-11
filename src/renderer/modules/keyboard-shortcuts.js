@@ -84,7 +84,8 @@ export const KeyboardShortcutsMixin = {
         this.showTabExpose();
         break;
       case 'close-popups':
-        this.closeAllPopups();
+        if (this.isCommandBarOpen?.() && this.commandSiteSearch) this.setCommandSiteSearch(null);
+        else this.closeAllPopups();
         break;
       default:
         if (/^space-[1-9]$/.test(shortcut)) this.focusSpaceByIndex?.(Number(shortcut.slice(6)) - 1);

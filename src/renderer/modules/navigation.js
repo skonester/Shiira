@@ -2,10 +2,13 @@
 // Handles URL processing, back/forward, reload, and security indicators
 
 import { isInternalUrl, getDomain } from './utils.js';
+import { parseSearchUrl, searchUrl } from './search-model.js';
 
 export const NavigationMixin = {
   navigate(input) {
     const url = this.processUrl(input);
+    const search = parseSearchUrl(url);
+    if (search) { void this.performHomeSearch(search.query, search.provider, { mode: search.mode }); return; }
     
     if (this.activeTabId) {
       const tab = this.tabs.find(t => t.id === this.activeTabId);
@@ -23,14 +26,9 @@ export const NavigationMixin = {
   },
 
   createWebviewForHomeTab(tab, url) {
-    const webview = document.createElement('webview');
-    webview.id = tab.id;
-    webview.setAttribute('partition', 'persist:main');
-    webview.setAttribute('webpreferences', 'contextIsolation=yes,devTools=no,backgroundThrottling=no,v8CacheOptions=bypassHeatCheckAndEagerCompile');
-    
-    this.setupWebviewEvents(webview, tab.id);
-    
-    this.browserContent.appendChild(webview);
+    this.cancelHomeSearch?.(tab);
+    tab.searchState = null;
+    const webview = this.createTabWebview(tab.id, tab.privateMode === true);
     
     // Apply current brightness setting to new webview
     webview.style.filter = `brightness(${this.currentBrightness / 100})`;
@@ -69,7 +67,7 @@ export const NavigationMixin = {
       return 'https://' + input;
     }
     
-    return this.buildSearchUrl ? this.buildSearchUrl(input) : `https://search.brave.com/search?q=${encodeURIComponent(input)}&source=web`;
+    return this.buildSearchUrl ? this.buildSearchUrl(input) : searchUrl(input, 'brave');
   },
 
   goBack() {
@@ -347,7 +345,7 @@ export const NavigationMixin = {
         break;
       case 'search':
         if (params.selectionText) {
-          this.createTab(this.buildSearchUrl ? this.buildSearchUrl(params.selectionText) : `https://search.brave.com/search?q=${encodeURIComponent(params.selectionText)}&source=web`);
+          this.createTab(this.buildSearchUrl ? this.buildSearchUrl(params.selectionText) : searchUrl(params.selectionText, 'brave'));
         }
         break;
       case 'open-link':

@@ -11,7 +11,7 @@ class PrivacyService {
         this.configPath = null;
         this.settings = {
             enableUrlSuggestions: true, // Default: enabled for convenience
-            suggestionsProvider: 'startpage', // 'startpage' or 'none'
+            suggestionsProvider: 'brave', // Official API; unavailable without a configured key
             sitePermissions: {}, // { hostname: { media: true/false, geolocation: true/false } }
             shieldEnabled: false // Encrypted DNS (DNS-over-HTTPS) toggle
         };
@@ -27,6 +27,10 @@ class PrivacyService {
             if (fs.existsSync(this.configPath)) {
                 const data = JSON.parse(fs.readFileSync(this.configPath, 'utf8'));
                 this.settings = { ...this.settings, ...data };
+                if (this.settings.suggestionsProvider === 'startpage') {
+                    this.settings.suggestionsProvider = 'brave';
+                    this.saveSettings();
+                }
             } else {
                 this.saveSettings();
             }

@@ -7,6 +7,7 @@
 
 import { isInternalUrl, getDomain, escapeHtml } from './utils.js';
 import { uid, letterIconUrl } from './spaces-model.js';
+import { parseSearchUrl } from './search-model.js';
 
 const WEBVIEW_PREFERENCES = 'contextIsolation=yes,devTools=no,plugins=yes,backgroundThrottling=no,v8CacheOptions=bypassHeatCheckAndEagerCompile';
 
@@ -222,6 +223,9 @@ export const TabManagerMixin = {
   },
 
   createTab(url = null, options = {}) {
+    if (!url) return this.createHomeTab(options);
+    const search = parseSearchUrl(url);
+    if (search) return this.createSearchTab(search.query, { ...options, provider: search.provider, mode: search.mode });
     const { deferLoad = false, title = null, favicon = null, privateMode = false, background = false } = options;
     const tabId = `tab-${++this.tabCounter}`;
 
@@ -270,23 +274,25 @@ export const TabManagerMixin = {
 
   createHomeTab(options = {}) {
     const tabId = `tab-${++this.tabCounter}`;
-    const tab = this.buildTabElement(tabId, { isHome: true, title: 'Home' });
+    const title = options.title || (options.privateMode ? 'Private Tab' : 'Home');
+    const tab = this.buildTabElement(tabId, { isHome: true, title, privateMode: options.privateMode === true });
     this.tabsContainer.appendChild(tab);
 
     const tabData = {
       id: tabId,
       element: tab,
       webview: null,
-      title: 'Home',
+      title,
       url: 'shiira://home',
       isHome: true,
+      privateMode: options.privateMode === true,
       navigationHistory: ['shiira://home'],
       navigationIndex: 0
     };
     this.placeNewTab(tabData, { ...options, section: 'today' });
     this.tabs.push(tabData);
     this.placeTabElements?.();
-    this.switchTab(tabId);
+    if (!options.background) this.switchTab(tabId);
     return tabId;
   },
 
@@ -319,7 +325,7 @@ export const TabManagerMixin = {
     if (tab.element.classList.contains('closing')) return;
 
     // Save tab info for reopen (Ctrl+Shift+T) - only if it has a URL
-    if (!tab.isHome && !tab.privateMode) {
+    if ((!tab.isHome || tab.searchState) && !tab.privateMode) {
       let url = tab.pendingUrl || tab.url;
       try {
         if (tab.webview) url = tab.webview.getURL() || url;
@@ -340,6 +346,7 @@ export const TabManagerMixin = {
     }
 
     this.onTabClosing?.(tab);
+    this.cancelHomeSearch?.(tab);
 
     // Pick and show the next tab right away so the window never shows a stale page.
     if (tabId === this.activeTabId) {
@@ -484,6 +491,7 @@ export const TabManagerMixin = {
     this.updateSecurityIndicator('');
     this.btnBack.disabled = true;
     this.btnForward.disabled = true;
+    this.restoreHomeSearch?.(this.tabs.find(tab => tab.id === this.activeTabId));
   },
 
   // Tab context menu (built by sidebar.js, so it knows about pinning, spaces and split view)

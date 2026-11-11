@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' shiira-asset:; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src * data: blob: 'self' shiira-asset: crx:; frame-src *; child-src *; connect-src 'self' https://www.startpage.com https://search.brave.com https://scira.ai https://*.scira.ai https://api.duckduckgo.com https://en.wikipedia.org;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' shiira-asset:; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src * data: blob: 'self' shiira-asset: crx:; frame-src *; child-src *; connect-src 'self';">
   <title>Shiira</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="sidebar.css">
+  <link rel="stylesheet" href="home-search.css">
 </head>
 <body>
   <div id="app">
@@ -217,20 +218,22 @@
           </div>
           <p class="welcome-copy">A Dark, personal browser. Smart enough for AI, restrained enough to stay clean. The balance you need.</p>
           <div class="search-box">
-            <input type="text" id="home-search" placeholder="Search Brave...">
+            <input type="search" id="home-search" placeholder="Search Brave..." aria-label="Search the web" maxlength="600">
             <img class="search-box-logo" src="shiira-asset://site-logos/brave-search.svg" alt="Brave">
+            <button type="button" id="home-search-submit" class="home-search-submit" aria-label="Search">→</button>
           </div>
           <div class="search-engine-chips">
             <button class="search-engine-chip active" data-engine="brave">Brave</button>
-            <button class="search-engine-chip" data-engine="startpage">Startpage</button>
+            <button class="search-engine-chip" data-engine="duckduckgo">DuckDuckGo Quick</button>
             <button class="search-engine-chip" data-engine="scira">Scira AI</button>
           </div>
-          <div class="ai-search-results hidden" id="ai-search-results">
+          <div class="home-search-scope hidden"><label for="home-search-scope">Search in</label><select id="home-search-scope"><option value="web">Web</option><option value="reddit">Reddit</option><option value="x">X</option><option value="people">People</option></select></div>
+          <div class="ai-search-results hidden" id="ai-search-results" aria-busy="false">
             <div class="ai-search-header">
-              <span class="ai-badge">Instant Results</span>
-              <button class="ai-search-close" id="ai-search-close">×</button>
+              <span class="ai-badge" id="home-search-provider">Search results</span>
+              <button class="ai-search-close" id="ai-search-close" aria-label="Close search results">×</button>
             </div>
-            <div class="ai-search-content" id="ai-search-content">
+            <div class="ai-search-content" id="ai-search-content" aria-live="polite">
               <div class="ai-loading">Searching...</div>
             </div>
           </div>
@@ -267,10 +270,11 @@
       <div class="command-bar" role="dialog" aria-label="Command bar">
         <div class="command-bar-input-row">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <button id="command-site-search" type="button" class="command-site-search hidden" aria-label="Leave site search"></button>
           <input id="command-bar-input" type="text" placeholder="Search, enter an address, or type a command" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="true" aria-controls="command-bar-results">
         </div>
         <div id="command-bar-results" class="command-bar-results" role="listbox"></div>
-        <div class="command-bar-hint"><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>Enter</kbd> open · <kbd>Alt</kbd>+<kbd>Enter</kbd> open in background · <kbd>Esc</kbd> close</div>
+        <div class="command-bar-hint"><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>Tab</kbd> search a site · <kbd>Shift</kbd>+<kbd>Enter</kbd> split · <kbd>Alt</kbd>+<kbd>Enter</kbd> background · <kbd>Esc</kbd> close</div>
       </div>
     </div>
 
@@ -1137,7 +1141,7 @@
               </div>
               <div class="settings-group">
                 <h5>Links</h5>
-                <label class="settings-check"><input id="settings-peek" type="checkbox"> Shift+click a link to preview it in Peek</label>
+                <label class="settings-check"><input id="settings-peek" type="checkbox"> Preview links in Peek with Shift+click, or when leaving a pinned tab’s site</label>
                 <p>Peek opens a page over the one you are on. Keep it as a tab, put it in split view, or press Esc.</p>
               </div>
               <div class="settings-group">
@@ -1158,14 +1162,31 @@
                 <label for="settings-search-engine">Search from the address bar and new tab page</label>
                 <select id="settings-search-engine">
                   <option value="brave">Brave</option>
-                  <option value="startpage">Startpage</option>
+                  <option value="duckduckgo">DuckDuckGo Quick</option>
                   <option value="scira">Scira AI</option>
                 </select>
               </div>
               <div class="settings-group">
                 <h5>Suggestions</h5>
                 <label class="settings-check"><input id="settings-url-suggestions" type="checkbox"> Show online suggestions while typing</label>
-                <p>Suggestions are requested from Startpage as you type in the address bar.</p>
+                <p>Brave suggestions use its official Autosuggest API when a key with Autosuggest access is configured. Scira and DuckDuckGo Quick use local history suggestions. Private tabs never request online suggestions.</p>
+              </div>
+              <div class="settings-group">
+                <h5>Brave Search API</h5>
+                <p>Get full web results inside Shiira. Add your own API key from the <a href="https://api-dashboard.search.brave.com/" target="_blank" rel="noopener">Brave API dashboard</a>. Provider usage limits and charges apply.</p>
+                <label for="search-brave-key">Brave API key</label>
+                <input type="password" id="search-brave-key" autocomplete="off" spellcheck="false" placeholder="Paste a key to save it">
+                <div class="settings-inline"><button type="button" class="settings-action" id="search-brave-save">Save key</button><button type="button" class="settings-action" id="search-brave-remove">Remove saved key</button></div>
+                <p id="search-brave-status" role="status">No API key configured.</p>
+              </div>
+              <div class="settings-group">
+                <h5>Scira AI API</h5>
+                <p>Get AI answers with sources, plus Reddit, X and people searches. Create a key on the <a href="https://api.scira.ai/" target="_blank" rel="noopener">Scira API platform</a>. Provider usage limits and charges apply.</p>
+                <label for="search-scira-key">Scira API key</label>
+                <input type="password" id="search-scira-key" autocomplete="off" spellcheck="false" placeholder="Paste a key to save it">
+                <div class="settings-inline"><button type="button" class="settings-action" id="search-scira-save">Save key</button><button type="button" class="settings-action" id="search-scira-remove">Remove saved key</button></div>
+                <p id="search-scira-status" role="status">No API key configured.</p>
+                <p>Keys are saved in your operating system’s keychain. DuckDuckGo Quick needs no key and offers instant answers and related topics.</p>
               </div>
             </section>
             <section class="settings-page hidden" data-settings-page="downloads">

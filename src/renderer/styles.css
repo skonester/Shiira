@@ -282,9 +282,6 @@ body.tab-dragging *::after {
   display: block;
 }
 
-.tab-title-logo[src*="Startpage.com_logo.svg"] {
-  height: 14px;
-}
 
 .tab-title-text {
   overflow: hidden;
@@ -658,7 +655,7 @@ body.tab-dragging *::after {
   margin-left: auto;
 }
 
-.suggestion-type-icon.startpage {
+.suggestion-type-icon.search {
   width: 28px;
   height: 28px;
   opacity: 0.6;

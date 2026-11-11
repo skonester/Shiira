@@ -7,7 +7,7 @@ const SETUP_THEMES = [
   ['sakura-shadow', 'Sakura Shadow']
 ];
 
-const SETUP_SEARCH = [['brave', 'Brave'], ['startpage', 'Startpage'], ['scira', 'Scira AI']];
+const SETUP_SEARCH = [['brave', 'Brave Search'], ['duckduckgo', 'DuckDuckGo Quick'], ['scira', 'Scira AI']];
 
 function normalizeHomepage(value) {
   const input = String(value || '').trim();
@@ -76,6 +76,7 @@ export const SettingsMixin = {
     });
     document.getElementById('settings-peek')?.addEventListener('change', event => {
       localStorage.setItem('shiira-peek-links', String(event.target.checked));
+      this.tabs.forEach(tab => { if (tab.webview) this.injectLinkRouting?.(tab.webview, this.currentTabUrl(tab)); });
     });
     document.getElementById('settings-import-arc')?.addEventListener('click', () => {
       this.hideSettings();
@@ -228,6 +229,7 @@ export const SettingsMixin = {
     });
     void this.loadBrowserSettings();
     void this.loadPrivacySettings();
+    void this.loadSearchCredentials();
   },
 
   hideSettings() { this.settingsModal?.classList.add('hidden'); },

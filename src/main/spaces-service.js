@@ -29,7 +29,10 @@ function safeUrl(value) {
 }
 
 function safeFavicon(value) {
-  if (typeof value !== 'string' || value.length > 4096) return null;
+  if (typeof value !== 'string') return null;
+  // Arc's local favicon cache contains PNGs. Keep these across restarts; never accept active data types.
+  if (value.length <= 22000 && /^data:image\/png;base64,iVBORw0KGgo[A-Za-z0-9+/]*={0,2}$/.test(value)) return value;
+  if (value.length > 4096) return null;
   return /^(https?|shiira-asset):/i.test(value) ? value : null;
 }
 

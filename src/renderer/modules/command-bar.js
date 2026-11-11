@@ -3,6 +3,7 @@
 
 import { escapeHtml } from './utils.js';
 import { hostOf, letterIcon, sortByPosition } from './spaces-model.js';
+import { matchSiteSearch, siteSearchUrl } from './site-search.js';
 
 const MAX_RESULTS = 12;
 
@@ -24,6 +25,8 @@ export const CommandBarMixin = {
     this.commandItems = [];
     this.commandIndex = 0;
     this.commandSuggestions = [];
+    this.commandSiteButton = document.getElementById('command-site-search');
+    this.commandSiteButton?.addEventListener('click', () => this.setCommandSiteSearch(null));
 
     this.commandInput.addEventListener('input', () => {
       this.commandIndex = 0;
@@ -31,7 +34,15 @@ export const CommandBarMixin = {
       this.fetchCommandSuggestions();
     });
     this.commandInput.addEventListener('keydown', (event) => {
-      if (event.key === 'ArrowDown' || (event.key === 'Tab' && !event.shiftKey)) {
+      if (['Tab', 'ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(event.key) || (event.key === 'Backspace' && this.commandSiteSearch && !this.commandInput.value)) event.stopPropagation();
+      const site = !this.commandSiteSearch && matchSiteSearch(this.commandInput.value);
+      if (event.key === 'Tab' && !event.shiftKey && site) {
+        event.preventDefault();
+        this.setCommandSiteSearch(site);
+      } else if (event.key === 'Backspace' && this.commandSiteSearch && !this.commandInput.value) {
+        event.preventDefault();
+        this.setCommandSiteSearch(null);
+      } else if (event.key === 'ArrowDown' || (event.key === 'Tab' && !event.shiftKey)) {
         event.preventDefault();
         this.moveCommandSelection(1);
       } else if (event.key === 'ArrowUp' || (event.key === 'Tab' && event.shiftKey)) {
@@ -39,10 +50,11 @@ export const CommandBarMixin = {
         this.moveCommandSelection(-1);
       } else if (event.key === 'Enter') {
         event.preventDefault();
-        this.runCommandItem(this.commandItems[this.commandIndex], { background: event.altKey });
+        this.runCommandItem(this.commandItems[this.commandIndex], { background: event.altKey, split: event.shiftKey });
       } else if (event.key === 'Escape') {
         event.preventDefault();
-        this.hideCommandBar();
+        if (this.commandSiteSearch) this.setCommandSiteSearch(null);
+        else this.hideCommandBar();
       }
     });
     this.commandBar.addEventListener('mousedown', (event) => {
@@ -58,6 +70,8 @@ export const CommandBarMixin = {
     this.hideSidebarMenu?.();
     this.commandBar.classList.remove('hidden');
     this.commandInput.value = text;
+    this.commandSiteSearch = null;
+    this.updateCommandSiteSearch();
     this.commandIndex = 0;
     this.commandSuggestions = [];
     this.renderCommandResults();
@@ -81,17 +95,36 @@ export const CommandBarMixin = {
     this.highlightCommandResult();
   },
 
+  updateCommandSiteSearch() {
+    if (this.commandSiteButton) {
+      this.commandSiteButton.classList.toggle('hidden', !this.commandSiteSearch);
+      this.commandSiteButton.textContent = this.commandSiteSearch ? `${this.commandSiteSearch.name} ×` : '';
+    }
+    this.commandInput.placeholder = this.commandSiteSearch ? `Search ${this.commandSiteSearch.name}` : 'Search, enter an address, or type a command';
+  },
+
+  setCommandSiteSearch(site) {
+    this.commandSiteSearch = site;
+    this.commandInput.value = '';
+    this.commandIndex = 0;
+    this.commandSuggestions = [];
+    clearTimeout(this.commandSuggestTimer);
+    this.updateCommandSiteSearch();
+    this.renderCommandResults();
+    this.commandInput.focus();
+  },
+
   fetchCommandSuggestions() {
     clearTimeout(this.commandSuggestTimer);
     const query = this.commandInput.value.trim();
-    if (!query || looksLikeAddress(query) || query.length < 2) {
+    if (this.tabs.find(tab => tab.id === this.activeTabId)?.privateMode || this.commandSiteSearch || !query || looksLikeAddress(query) || query.length < 2) {
       this.commandSuggestions = [];
       return;
     }
     this.commandSuggestTimer = setTimeout(async () => {
       try {
-        const suggestions = await window.shiiraAPI.getUrlSuggestions(query);
-        if (this.commandInput.value.trim() !== query) return;
+        const suggestions = await window.shiiraAPI.getUrlSuggestions(query, this.currentSearchEngine);
+        if (this.commandSiteSearch || !this.isCommandBarOpen() || this.commandInput.value.trim() !== query) return;
         this.commandSuggestions = (Array.isArray(suggestions) ? suggestions : [])
           .filter(s => typeof s === 'string' && s.toLowerCase() !== query.toLowerCase())
           .slice(0, 3);
@@ -136,6 +169,13 @@ export const CommandBarMixin = {
     const query = raw.toLowerCase();
     const items = [];
 
+    if (this.commandSiteSearch) {
+      const site = this.commandSiteSearch;
+      const url = siteSearchUrl(site, raw);
+      return [{ type: 'search', label: raw || `Search ${site.name}`, subtitle: raw ? `Search ${site.name}` : 'Type your search · Backspace or Escape to leave site search', url,
+        run: (opts) => { if (raw) this.openFromCommandBar(url, opts); } }];
+    }
+
     if (!query) {
       items.push({ type: 'new', label: 'Open a New Tab', subtitle: 'Shiira home page', run: () => this.createTab() });
       const recent = [...this.tabs]
@@ -162,6 +202,16 @@ export const CommandBarMixin = {
       .slice(0, 5)
       .forEach(tab => items.push(this.tabCommandItem(tab)));
 
+    const site = matchSiteSearch(raw);
+    if (site) items.push({ type: 'site', label: `Search ${site.name}`, subtitle: 'Press Tab, then type your search', hint: 'Tab', run: () => this.setCommandSiteSearch(site) });
+
+    // Archived tabs remain discoverable after their page closes.
+    (this.archive || [])
+      .filter(entry => matches(query, entry.title, entry.url))
+      .slice(0, 3)
+      .forEach(entry => items.push({ type: 'archive', label: entry.title || entry.url, subtitle: `Archived · ${hostOf(entry.url)}`, url: entry.url, favicon: entry.favicon,
+        run: (opts) => this.openFromCommandBar(entry.url, { ...opts, spaceId: entry.spaceId }) }));
+
     // Spaces.
     sortByPosition(this.spaces || [])
       .filter(space => space.id !== this.focusedSpaceId && matches(query, space.title, 'space'))
@@ -186,7 +236,7 @@ export const CommandBarMixin = {
       items.push({ type: 'suggestion', label: text, subtitle: 'Search suggestion', url, run: (opts) => this.openFromCommandBar(url, opts) });
     });
 
-    return items.slice(0, MAX_RESULTS);
+    return [...items.filter(item => item.type === 'tab'), ...items.filter(item => item.type !== 'tab')].slice(0, MAX_RESULTS);
   },
 
   tabCommandItem(tab) {
@@ -204,8 +254,12 @@ export const CommandBarMixin = {
     };
   },
 
-  openFromCommandBar(url, { background = false } = {}) {
-    this.createTab(url, { background });
+  openFromCommandBar(url, { background = false, split = false, spaceId } = {}) {
+    const active = this.tabs.find(tab => tab.id === this.activeTabId);
+    const targetSpace = this.spaces?.some(space => space.id === spaceId) ? spaceId : this.focusedSpaceId;
+    const canSplit = split && active && !active.isHome && !url.startsWith('shiira://search?');
+    const id = this.createTab(url, { background: Boolean(canSplit || background), spaceId: canSplit ? this.focusedSpaceId : targetSpace, privateMode: active?.privateMode === true });
+    if (canSplit) this.openSplitView(id);
   },
 
   renderCommandResults() {
@@ -252,7 +306,7 @@ export const CommandBarMixin = {
         this.highlightCommandResult();
       });
       row.addEventListener('mousedown', (event) => event.preventDefault());
-      row.addEventListener('click', (event) => this.runCommandItem(item, { background: event.altKey }));
+      row.addEventListener('click', (event) => this.runCommandItem(item, { background: event.altKey, split: event.shiftKey }));
       return row;
     }));
     this.highlightCommandResult();
@@ -270,6 +324,8 @@ export const CommandBarMixin = {
 
   runCommandItem(item, options = {}) {
     if (!item) return;
+    if (item.type === 'site') { item.run(); return; }
+    if (this.commandSiteSearch && !this.commandInput.value.trim()) return;
     this.hideCommandBar();
     item.run(options);
   },

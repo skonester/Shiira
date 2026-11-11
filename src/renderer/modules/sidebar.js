@@ -8,7 +8,7 @@ import { escapeHtml } from './utils.js';
 import {
   uid, defaultSpace, DEFAULT_SPACE_ID, SPACE_COLORS, SPACE_ICONS,
   siblings, insertAt, isInsideFolder, folderTree, visibleOrder,
-  shouldArchive, shouldSleep, hostOf, letterIcon, shade, planFromArc, sortByPosition
+  shouldArchive, shouldSleep, hostOf, letterIcon, shade, planFromArc, mergeImportedHistory, sortByPosition
 } from './spaces-model.js';
 
 const KEYS = {
@@ -473,7 +473,7 @@ export const SidebarMixin = {
   // ---------- Pinning, favorites, moving ----------
 
   currentTabUrl(tab) {
-    if (!tab || tab.isHome) return '';
+    if (!tab || (tab.isHome && !tab.searchState)) return '';
     try {
       const live = tab.webview?.getURL?.();
       if (live && live !== 'about:blank') return live;
@@ -500,6 +500,7 @@ export const SidebarMixin = {
     }
     const list = siblings(this.tabs, this.sidebarFolders, { section, spaceId: tab.spaceId, parentId: tab.parentId });
     insertAt(list, { kind: 'tab', id: tab.id, ref: tab }, index);
+    if (tab.webview) this.injectLinkRouting?.(tab.webview, this.currentTabUrl(tab));
   },
 
   togglePin(tabId = this.activeTabId) {
@@ -1207,7 +1208,7 @@ export const SidebarMixin = {
     const activeBySpace = {};
     for (const [spaceId, tabId] of Object.entries(this.activeBySpace)) {
       const tab = this.tabs.find(t => t.id === tabId);
-      if (tab && !tab.privateMode && !tab.isHome) activeBySpace[spaceId] = tab.itemId;
+      if (tab && !tab.privateMode && (!tab.isHome || tab.searchState)) activeBySpace[spaceId] = tab.itemId;
     }
     return {
       version: 1,
@@ -1243,8 +1244,10 @@ export const SidebarMixin = {
     try {
       const result = await window.shiiraAPI.spaces.save(this.serializeSpaces());
       if (!result?.success) console.warn('[Spaces] Save failed:', result?.error);
+      return result;
     } catch (error) {
       console.error('[Spaces] Save failed:', error);
+      return { success: false, error: error.message };
     }
   },
 
@@ -1306,18 +1309,23 @@ export const SidebarMixin = {
   // ---------- Arc import ----------
 
   async importFromArc() {
-    this.closeAllPopups?.();
-    let found = await window.shiiraAPI.arc.locate();
-    if (!found?.found) {
-      const pick = await this.showConfirmation(
-        'Arc was not found',
-        'Shiira could not find Arc’s sidebar file on this computer. You can choose StorableSidebar.json yourself (on Windows it is in %LOCALAPPDATA%\\Packages\\TheBrowserCompany.Arc_…\\LocalCache\\Local\\Arc).',
-        { confirmText: 'Choose File…' }
-      );
-      if (!pick) return;
-      found = await window.shiiraAPI.arc.chooseFile();
-      if (found?.canceled) return;
+    if (this.arcImportRunning) return;
+    if (this.spacesReadOnly) {
+      this.showError?.('Import Arc data in the first Shiira window so it can be saved.', 'Arc import');
+      return;
     }
+    this.arcImportRunning = true;
+    try {
+      await this.importArcSource();
+    } catch (error) {
+      this.showError?.(error.message || 'Arc import failed.', 'Arc import failed');
+    } finally { this.arcImportRunning = false; }
+  },
+
+  async importArcSource() {
+    this.closeAllPopups?.();
+    const found = await window.shiiraAPI.arc.chooseFile();
+    if (found?.canceled) return;
     if (found?.error || !found?.summary) {
       this.showError?.(found?.error || 'This file could not be read.', 'Arc import failed');
       return;
@@ -1325,7 +1333,7 @@ export const SidebarMixin = {
     const s = found.summary;
     const ok = await this.showConfirmation(
       'Import from Arc',
-      `Found ${s.spaces} space${s.spaces === 1 ? '' : 's'}, ${s.pinned} pinned tab${s.pinned === 1 ? '' : 's'}, ${s.folders} folder${s.folders === 1 ? '' : 's'} and ${s.favorites} favorite${s.favorites === 1 ? '' : 's'}.\nArc's files are only read, never changed.`,
+      `Found ${s.spaces} spaces, ${s.pinned} pinned tabs, ${s.folders} folders, ${s.favorites} favorites and ${s.archive} archived tabs from ${s.profiles} Arc profiles.\n\nFavorites from all profiles will join Shiira's shared favorites. Spaces share cookies and logins in Shiira. Passwords, cookies, extensions, Boosts and Easels are not imported. Arc's files are only read.`,
       { confirmText: 'Import' }
     );
     if (!ok) return;
@@ -1333,22 +1341,36 @@ export const SidebarMixin = {
     if (s.today > 0) {
       includeToday = await this.showConfirmation(
         'Bring over Today tabs too?',
-        `Arc also has ${s.today} unpinned tab${s.today === 1 ? '' : 's'}. They will open asleep in Today.`,
+        `Arc also has ${s.today} unpinned tab${s.today === 1 ? '' : 's'}. They will open asleep in Today. Enable session restore in Settings to keep Today tabs after restarting.`,
         { confirmText: 'Include Them', cancelText: 'Pinned Only' }
       );
     }
-    const read = await window.shiiraAPI.arc.read(found.path);
+    let includeHistory = false;
+    if (s.historyProfiles > 0) {
+      includeHistory = await this.showConfirmation('Import Arc browsing history?',
+        `History is available from ${s.historyProfiles} Arc profiles. The most recent visits will be merged with Shiira's shared browsing history (up to 1,000 entries).`,
+        { confirmText: 'Include History', cancelText: 'Skip History' });
+    }
+    const read = await window.shiiraAPI.arc.read(found.path, { includeHistory });
     if (!read?.success) {
       this.showError?.(read?.error || 'The Arc sidebar could not be read.', 'Arc import failed');
       return;
     }
-    const result = this.applyArcImport(read.plan, { includeToday });
-    this.showSuccess?.(`Imported ${result.spaces} space${result.spaces === 1 ? '' : 's'} and ${result.tabs} tab${result.tabs === 1 ? '' : 's'}.`, 'Arc import complete');
+    const result = await this.applyArcImport(read.plan, { includeToday });
+    const warnings = [...new Set(read.plan.warnings || [])];
+    this.showSuccess?.(`Imported ${result.spaces} spaces, ${result.tabs} tabs, ${result.archive} archived tabs and ${result.history} history entries.${warnings.length ? `\n\n${warnings.slice(0, 5).join('\n')}` : ''}`, 'Arc import complete');
   },
 
-  applyArcImport(plan, { includeToday = false } = {}) {
+  async applyArcImport(plan, { includeToday = false } = {}) {
+    if (!this.spacesLoaded || this.spacesReadOnly) throw new Error('Spaces are not ready for a saved import in this window.');
     const existingFavoriteUrls = this.tabs.filter(t => t.section === 'favorites').map(t => this.currentTabUrl(t));
-    const { spaces, folders, tabs } = planFromArc(plan, { existingSpaces: this.spaces, existingFavoriteUrls, includeToday });
+    const { spaces, folders, tabs, archive, focusedSpaceId } = planFromArc(plan, { existingSpaces: this.spaces, existingFavoriteUrls, includeToday });
+    // The storage service has finite limits. Refuse the whole import instead of silently dropping tabs on restart.
+    const keepers = this.tabs.filter(t => !t.privateMode && !t.isHome && t.section !== 'today');
+    const firstImport = this.spaces.length === 1 && this.spaces[0].id === DEFAULT_SPACE_ID && !keepers.length && !this.sidebarFolders.length;
+    if (this.spaces.length + spaces.length > 50 || this.sidebarFolders.length + folders.length > 1000 || keepers.length + tabs.filter(t => t.section !== 'today').length > 3000) {
+      throw new Error('This import exceeds Shiira’s space, folder or pinned-tab storage limit. Remove unused items before importing.');
+    }
     this.spaces.push(...spaces);
     this.sidebarFolders.push(...folders);
     for (const tab of tabs) {
@@ -1359,13 +1381,28 @@ export const SidebarMixin = {
         spaceId: tab.spaceId,
         parentId: tab.parentId,
         position: tab.position,
-        itemId: tab.itemId
+        itemId: tab.itemId,
+        customTitle: tab.customTitle,
+        pinnedUrl: tab.pinnedUrl,
+        favicon: tab.favicon,
+        lastActiveAt: tab.lastActiveAt
       });
     }
-    if (spaces[0]) this.focusSpace(spaces[0].id);
+    this.archive = [...this.archive, ...archive].sort((a, b) => b.archivedAt - a.archivedAt).slice(0, MAX_ARCHIVE);
+    this.browsingHistory = mergeImportedHistory(this.browsingHistory || [], plan.history || []);
+    this.saveBrowsingHistory?.();
+    if (firstImport && Number.isFinite(plan.sidebarWidth)) {
+      this.sidebarWidth = clamp(plan.sidebarWidth, MIN_WIDTH, MAX_WIDTH);
+      localStorage.setItem(KEYS.width, String(this.sidebarWidth));
+      document.documentElement.style.setProperty('--sidebar-width', `${this.sidebarWidth}px`);
+    }
+    if (focusedSpaceId) this.focusSpace(focusedSpaceId);
     this.placeTabElements();
     this.renderSpaceChrome();
-    this.saveSpacesSoon();
-    return { spaces: spaces.length, tabs: tabs.length };
+    const saved = await this.saveSpacesNow();
+    if (!saved?.success) throw new Error(`Arc data was added to this window but could not be saved: ${saved?.error || 'storage unavailable'}`);
+    await this.saveSession?.();
+    return { spaces: spaces.length, tabs: tabs.length, archive: archive.length,
+      history: (plan.history || []).filter(h => this.browsingHistory.some(v => v.url === h.url && v.timestamp === h.timestamp)).length };
   }
 };

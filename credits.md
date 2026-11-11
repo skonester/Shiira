@@ -65,6 +65,14 @@ Chrome extensions use [electron-chrome-extensions](https://github.com/samuelmadd
 
 ---
 
+## YARC Attribution (GPL-3.0-or-later)
+
+Shiira's expanded Arc migration and command-bar site search are adapted from [YARC / Arc Shell](https://github.com/yenebeb/arc-shell) by **YARC contributors**, using the local `yarc-main` source snapshot. This includes modern and legacy sidebar layouts, all profiles' favorites, archives, copied Arc folders, cached PNG icons, and history read from temporary SQLite copies. The sanitized Arc sample used in tests also comes from YARC. Matching-tab priority, archive search, Shift+Enter split view, and pinned-link Peek follow YARC's behavior and are implemented for Shiira's renderer.
+
+YARC is GPL-3.0-or-later; these adaptations are used under GPL-3.0. See [the YARC notice](THIRD_PARTY_NOTICES/yarc-GPL-3.0-NOTICE.txt) and [the full license](THIRD_PARTY_NOTICES/GPL-3.0.txt).
+
+---
+
 ## Historical Roots: The Original Shiira Browser
 
 This modern project stands as a dedicated homage to the classic, open-source **Shiira** browser, which was originally developed for Apple's Mac OS X.

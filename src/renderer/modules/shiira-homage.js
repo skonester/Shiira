@@ -1,30 +1,12 @@
 // Shiira Homage Module
-// Adds palette drawers, Tab Expose, page-turn transitions, and Startpage search.
+// Adds palette drawers, Tab Expose, page-turn transitions, and in-app API search.
 
-const SEARCH_ENGINES = {
-  brave: {
-    label: 'Brave',
-    logo: 'shiira-asset://site-logos/brave-search.svg',
-    url: query => `https://search.brave.com/search?q=${encodeURIComponent(query)}&source=web`
-  },
-  startpage: {
-    label: 'Startpage',
-    logo: 'shiira-asset://site-logos/Startpage.com_logo.svg',
-    url: query => `https://www.startpage.com/sp/search?query=${encodeURIComponent(query)}`
-  },
-  scira: {
-    label: 'Scira',
-    logo: 'shiira-asset://site-logos/scira.svg',
-    url: query => `https://scira.ai/?q=${encodeURIComponent(query)}`
-  }
-};
+import { SEARCH_ENGINES, normalizeSearchEngine, searchUrl } from './search-model.js';
 
 export const ShiiraHomageMixin = {
   initShiiraHomage() {
-    this.currentSearchEngine = localStorage.getItem('shiira-search-engine') || 'brave';
-    if (!SEARCH_ENGINES[this.currentSearchEngine]) {
-      this.currentSearchEngine = 'brave';
-    }
+    this.currentSearchEngine = normalizeSearchEngine(localStorage.getItem('shiira-search-engine'));
+    localStorage.setItem('shiira-search-engine', this.currentSearchEngine);
     this.btnShiiraDrawer = document.getElementById('btn-shiira-drawer');
     this.shiiraDrawer = document.getElementById('shiira-drawer');
     this.btnCloseShiiraDrawer = document.getElementById('btn-close-shiira-drawer');
@@ -68,14 +50,15 @@ export const ShiiraHomageMixin = {
       button.addEventListener('click', () => this.selectSearchEngine(button.dataset.engine));
     });
     this.updateSearchEngineUI();
-    this.initAISearch();
+    this.initHomeSearch();
   },
 
   selectSearchEngine(engine) {
-    if (!SEARCH_ENGINES[engine]) return;
+    if (!Object.hasOwn(SEARCH_ENGINES, engine)) return;
     this.currentSearchEngine = engine;
     localStorage.setItem('shiira-search-engine', engine);
     this.updateSearchEngineUI();
+    this.searchScope?.parentElement.classList.toggle('hidden', engine !== 'scira');
   },
 
   updateSearchEngineUI() {
@@ -83,7 +66,7 @@ export const ShiiraHomageMixin = {
       button.classList.toggle('active', button.dataset.engine === this.currentSearchEngine);
     });
 
-    const engine = SEARCH_ENGINES[this.currentSearchEngine] || SEARCH_ENGINES.startpage;
+    const engine = SEARCH_ENGINES[this.currentSearchEngine] || SEARCH_ENGINES.brave;
     if (this.homeSearch) {
       this.homeSearch.placeholder = `Search ${engine.label}...`;
     }
@@ -96,111 +79,7 @@ export const ShiiraHomageMixin = {
 
   buildSearchUrl(query) {
     const trimmed = (query || '').trim();
-    const engine = SEARCH_ENGINES[this.currentSearchEngine] || SEARCH_ENGINES.startpage;
-    return engine.url(trimmed);
-  },
-
-  // AI Search for Scira
-  initAISearch() {
-    this.aiSearchResults = document.getElementById('ai-search-results');
-    this.aiSearchContent = document.getElementById('ai-search-content');
-    this.aiSearchClose = document.getElementById('ai-search-close');
-    
-    this.aiSearchClose?.addEventListener('click', () => this.hideAISearch());
-  },
-
-  async performAISearch(query) {
-    if (!this.aiSearchResults || !this.aiSearchContent) return;
-    
-    this.aiSearchResults.classList.remove('hidden');
-    this.aiSearchContent.innerHTML = '<div class="ai-loading">Getting instant results...</div>';
-    
-    try {
-      // Try Wikipedia API first for factual answers
-      const wikiResponse = await fetch(
-        `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query)}`,
-        { signal: AbortSignal.timeout(3000) }
-      );
-      
-      if (wikiResponse.ok) {
-        const wikiData = await wikiResponse.json();
-        if (wikiData.extract) {
-          this.renderWikiResults(wikiData, query);
-          return;
-        }
-      }
-      
-      // Fallback to DuckDuckGo Instant Answer API
-      const ddgResponse = await fetch(
-        `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
-        { signal: AbortSignal.timeout(3000) }
-      );
-      
-      if (ddgResponse.ok) {
-        const ddgData = await ddgResponse.json();
-        this.renderAISearchResults(ddgData, query);
-      } else {
-        throw new Error('Both APIs failed');
-      }
-    } catch (error) {
-      this.aiSearchContent.innerHTML = `
-        <div class="ai-error">
-          <p>Instant results unavailable.</p>
-          <p><a href="${SEARCH_ENGINES.scira.url(query)}" target="_blank">Search with Scira AI</a> for full AI-powered answers.</p>
-        </div>
-      `;
-    }
-  },
-
-  renderWikiResults(data, query) {
-    const html = `
-      <div class="ai-results-content">
-        <div class="ai-answer">
-          <h3>${data.title}</h3>
-          <p>${data.extract}</p>
-          ${data.content_urls?.desktop?.page ? `<p><a href="${data.content_urls.desktop.page}" target="_blank">Read more on Wikipedia</a></p>` : ''}
-        </div>
-        <div class="ai-fallback">
-          <p><a href="${SEARCH_ENGINES.scira.url(query)}" target="_blank">Search with Scira AI</a> for more comprehensive answers.</p>
-        </div>
-      </div>
-    `;
-    this.aiSearchContent.innerHTML = html;
-  },
-
-  renderAISearchResults(data, query) {
-    let html = '<div class="ai-results-content">';
-    
-    // Abstract (main answer)
-    if (data.Abstract) {
-      html += `<div class="ai-answer"><h3>${data.Heading || 'Quick Answer'}</h3><p>${data.Abstract}</p></div>`;
-    }
-    
-    // Related topics
-    if (data.RelatedTopics && data.RelatedTopics.length > 0) {
-      html += '<div class="ai-related"><h4>Related Topics:</h4><ul>';
-      data.RelatedTopics.slice(0, 5).forEach(topic => {
-        if (topic.Text && topic.FirstURL) {
-          html += `<li><a href="${topic.FirstURL}" target="_blank">${topic.Text}</a></li>`;
-        }
-      });
-      html += '</ul></div>';
-    }
-    
-    // If no results, show direct link to Scira
-    if (!data.Abstract && !data.RelatedTopics?.length) {
-      html += `<div class="ai-fallback">
-        <p>No instant results available.</p>
-        <p><a href="${SEARCH_ENGINES.scira.url(query)}" target="_blank">Click here to search with Scira AI</a> for comprehensive AI-powered answers.</p>
-      </div>`;
-    }
-    
-    html += '</div>';
-    this.aiSearchContent.innerHTML = html;
-  },
-
-  hideAISearch() {
-    this.aiSearchResults?.classList.add('hidden');
+    return searchUrl(trimmed, this.currentSearchEngine);
   },
 
   toggleShiiraDrawer() {

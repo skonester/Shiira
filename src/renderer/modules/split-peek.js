@@ -1,4 +1,4 @@
-// Split view (two tabs side by side) and Peek (Shift+click a link to preview it over the page).
+// Split view and Peek (Shift+click, or links to other hosts from pinned tabs/favorites).
 // Both are Arc features, also in Solamar (https://github.com/Bambeek/solamar, GPL-3.0-or-later).
 
 const PEEK_KEY = 'shiira-peek-links';
@@ -124,17 +124,19 @@ export const SplitPeekMixin = {
     });
   },
 
-  openPeek(url) {
+  openPeek(url, sourceTabId = this.activeTabId) {
     if (!this.peekOverlay || !/^https?:/i.test(url || '')) {
-      this.openLinkInTabOnce(url);
+      this.openLinkInTabOnce(url, sourceTabId);
       return;
     }
     this.closePeek();
     this.hideSidebarMenu?.();
     this.peekUrl = url;
+    const source = this.tabs.find(tab => tab.id === sourceTabId);
+    this.peekSource = { spaceId: source?.spaceId || this.focusedSpaceId, privateMode: source?.privateMode === true };
     const webview = document.createElement('webview');
     webview.className = 'peek-webview';
-    webview.setAttribute('partition', 'persist:main');
+    webview.setAttribute('partition', source?.webview?.getAttribute('partition') || (source?.privateMode ? `private:${source.id}` : 'persist:main'));
     webview.setAttribute('webpreferences', WEBVIEW_PREFERENCES);
     webview.style.filter = `brightness(${(this.currentBrightness || 100) / 100})`;
     const setTitle = (text) => { if (this.peekTitle) this.peekTitle.textContent = text; };
@@ -155,7 +157,7 @@ export const SplitPeekMixin = {
     });
     webview.addEventListener('new-window', (event) => {
       event.preventDefault?.();
-      if (event.url && event.url !== 'about:blank') this.openLinkInTabOnce(event.url);
+      if (event.url && event.url !== 'about:blank') this.openLinkInTabOnce(event.url, sourceTabId);
     });
     webview.src = url;
     this.peekHost.replaceChildren(webview);
@@ -173,16 +175,18 @@ export const SplitPeekMixin = {
 
   peekToTab() {
     const url = this.peekCurrentUrl();
+    const options = this.peekSource;
     this.closePeek();
-    if (url) this.createTab(url);
+    if (url) this.createTab(url, options);
   },
 
   peekToSplit() {
     const url = this.peekCurrentUrl();
+    const options = this.peekSource;
     this.closePeek();
     if (!url) return;
     const active = this.tabs.find(t => t.id === this.activeTabId);
-    const id = this.createTab(url, { background: true });
+    const id = this.createTab(url, { ...options, background: true });
     if (active && !active.isHome) this.openSplitView(id);
     else this.switchTab(id);
   },
@@ -192,5 +196,6 @@ export const SplitPeekMixin = {
     this.peekOverlay.classList.add('hidden');
     this.peekHost.replaceChildren();
     this.peekWebview = null;
+    this.peekSource = null;
   }
 };

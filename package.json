@@ -1,12 +1,14 @@
 {
   "name": "shiira-browser",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "description": "Shiira - A super dark browser inspired by the classic Shiira project",
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --enable-logging",
     "test": "node --test tests/*.test.js",
+    "test:arc:electron": "node tests/run-electron-smoke.cjs arc",
+    "test:search:electron": "node tests/run-electron-smoke.cjs search",
     "build": "electron-builder",
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac",

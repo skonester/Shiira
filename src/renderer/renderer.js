@@ -32,6 +32,7 @@ import { SidebarMixin } from './modules/sidebar.js';
 import { CommandBarMixin } from './modules/command-bar.js';
 import { SplitPeekMixin } from './modules/split-peek.js';
 import { ExtensionsMixin } from './modules/extensions.js';
+import { HomeSearchMixin } from './modules/home-search.js';
 
 console.log('[Shiira] Loading modular renderer...');
 
@@ -58,7 +59,7 @@ class ShiiraBrowser {
     this.tabs = [];
     this.activeTabId = null;
     this.tabCounter = 0;
-    this.homepage = 'https://www.startpage.com';
+    this.homepage = 'shiira://home';
     
     // Closed tabs for reopen (Ctrl+Shift+T)
     this.closedTabs = [];
@@ -75,8 +76,6 @@ class ShiiraBrowser {
     // Site logos for tab titles
     this.siteLogos = {
       'search.brave.com': 'shiira-asset://site-logos/brave-search.svg',
-      'www.startpage.com': 'shiira-asset://site-logos/Startpage.com_logo.svg',
-      'startpage.com': 'shiira-asset://site-logos/Startpage.com_logo.svg',
       'scira.ai': 'shiira-asset://site-logos/scira.svg',
       'www.scira.ai': 'shiira-asset://site-logos/scira.svg'
     };
@@ -527,14 +526,7 @@ class ShiiraBrowser {
           const query = this.homeSearch.value.trim();
           if (!query) return;
           
-          // If Scira is selected, show AI search results inline
-          if (this.currentSearchEngine === 'scira') {
-            await this.performAISearch(query);
-          } else {
-            this.navigate(query);
-          }
-          this.homeSearch.value = '';
-          this.homeSearch.blur();
+          await this.performHomeSearch(query);
         }
       });
     }
@@ -999,7 +991,7 @@ class ShiiraBrowser {
       }
 
       // Today tabs only; pinned tabs and favorites live in spaces.json.
-      const tabsForSession = this.tabs.filter(tab => !tab.privateMode && !tab.isHome && tab.section === 'today'
+      const tabsForSession = this.tabs.filter(tab => !tab.privateMode && (!tab.isHome || tab.searchState) && tab.section === 'today'
         && !tab.element?.classList.contains('closing'));
       const tabsData = tabsForSession.map(tab => ({
         url: this.currentTabUrl ? this.currentTabUrl(tab) : (tab.pendingUrl || tab.url || ''),
@@ -1100,6 +1092,7 @@ applyMixin(ShiiraBrowser, SidebarMixin);           // Arc-style sidebar, spaces,
 applyMixin(ShiiraBrowser, CommandBarMixin);        // Command bar (Ctrl+T)
 applyMixin(ShiiraBrowser, SplitPeekMixin);         // Split view and Peek
 applyMixin(ShiiraBrowser, ExtensionsMixin);        // Chrome extensions
+applyMixin(ShiiraBrowser, HomeSearchMixin);        // Native Brave/Scira/DuckDuckGo search results
 
 // Start the browser
 console.log('[Shiira] Creating browser instance...');
