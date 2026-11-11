@@ -23,12 +23,168 @@ test('provider shortcuts and address search fallback use APIs inside Shiira', as
   assert.equal(parseSearchUrl(NavigationMixin.processUrl.call({}, 'browser tabs')).provider, 'brave');
 });
 
+test('website fallback URLs keep the query on the selected provider and encode URL syntax', async () => {
+  const { websiteSearchUrl } = await load('search-model');
+  const query = 'browser & tabs/#? 日本';
+  for (const [provider, origin] of [['brave', 'https://search.brave.com'], ['scira', 'https://scira.ai']]) {
+    const url = new URL(websiteSearchUrl(`  ${query}  `, provider));
+    assert.equal(url.origin, origin);
+    assert.equal(url.searchParams.get('q'), query);
+    assert.equal(url.hash, '');
+    assert.equal(url.username, '');
+    assert.equal(url.searchParams.size, provider === 'brave' ? 2 : 1);
+  }
+  for (const provider of ['duckduckgo', 'startpage', '__proto__']) assert.equal(websiteSearchUrl(query, provider), null);
+  assert.equal(websiteSearchUrl(' ', 'scira'), null);
+});
+
 function browserState(mixin) {
   return { ...mixin, tabs: [{ id: 'home', isHome: true, url: 'shiira://home' }], activeTabId: 'home',
     currentSearchEngine: 'brave', searchScope: { value: 'web' }, homeSearch: { value: '' }, urlInput: { value: '' },
-    renderHomeSearch() {}, updateTabTitle() {}, saveSession: async () => true };
+    navigations: [], createWebviewForHomeTab(tab, url) { this.navigations.push({ tab, url }); tab.searchState = null; tab.isHome = false; tab.url = url; },
+    renderHomeSearch() {}, updateTabTitle() {}, selectSearchEngine(provider) { this.currentSearchEngine = provider; }, saveSession: async () => true };
 }
 const result = query => ({ success: true, result: { provider: 'brave', query, answer: '', results: [], more: false } });
+
+test('Brave and Scira API failures automatically search their own websites once in the original private tab', async () => {
+  const { HomeSearchMixin } = await load('home-search');
+  const previous = global.window;
+  try {
+    for (const provider of ['brave', 'scira']) {
+      for (const code of ['missing_key', 'authentication', 'rate_limit', 'provider_error', 'timeout', 'network', 'invalid_response', 'unavailable', 'busy']) {
+        let calls = 0;
+        global.window = { shiiraAPI: { search: { query: async () => { calls++; return { success: false, code }; }, cancel: async () => {} } } };
+        const browser = browserState(HomeSearchMixin);
+        const source = browser.tabs[0];
+        source.privateMode = true;
+        await browser.performHomeSearch('web browser & tabs', provider);
+        assert.equal(calls, 1);
+        assert.equal(browser.tabs.length, 1);
+        assert.equal(browser.navigations.length, 1);
+        assert.equal(browser.navigations[0].tab, source);
+        assert.equal(new URL(source.url).searchParams.get('q'), 'web browser & tabs');
+        assert.equal(new URL(source.url).hostname, provider === 'brave' ? 'search.brave.com' : 'scira.ai');
+        assert.equal(source.privateMode, true);
+        assert.equal(source.searchState, null);
+      }
+    }
+  } finally { global.window = previous; }
+});
+
+test('cancellation, invalid input, successful searches and DuckDuckGo errors never open a provider website', async () => {
+  const { HomeSearchMixin } = await load('home-search');
+  const previous = global.window;
+  try {
+    for (const [provider, response] of [['brave', { success: false, code: 'canceled' }], ['scira', { success: false, code: 'invalid_request' }],
+      ['duckduckgo', { success: false, code: 'network' }], ['scira', result('web browser')]]) {
+      global.window = { shiiraAPI: { search: { query: async () => response, cancel: async () => {} } } };
+      const browser = browserState(HomeSearchMixin);
+      await browser.performHomeSearch('web browser', provider);
+      assert.equal(browser.navigations.length, 0);
+      assert.equal(browser.tabs[0].isHome, true);
+    }
+  } finally { global.window = previous; }
+});
+
+test('a bridge failure uses website fallback, but a failure after switching tabs stays with its source', async () => {
+  const { HomeSearchMixin } = await load('home-search');
+  const previous = global.window;
+  try {
+    global.window = { shiiraAPI: { search: { query: async () => { throw new Error('Bridge unavailable'); } } } };
+    const bridge = browserState(HomeSearchMixin);
+    await bridge.performHomeSearch('web browser', 'scira');
+    assert.equal(new URL(bridge.tabs[0].url).hostname, 'scira.ai');
+
+    let finish;
+    global.window = { shiiraAPI: { search: { query: () => new Promise(resolve => { finish = resolve; }) } } };
+    const browser = browserState(HomeSearchMixin);
+    const source = browser.tabs[0];
+    const pending = browser.performHomeSearch('background query', 'brave');
+    const active = { id: 'other', isHome: true, url: 'shiira://home' };
+    browser.tabs.push(active);
+    browser.activeTabId = active.id;
+    finish({ success: false, code: 'provider_error' });
+    await pending;
+    assert.equal(browser.activeTabId, active.id);
+    assert.equal(active.url, 'shiira://home');
+    assert.equal(browser.navigations[0].tab, source);
+  } finally { global.window = previous; }
+});
+
+test('a late failure after cancel, a newer search or tab closure cannot open the fallback site', async () => {
+  const { HomeSearchMixin } = await load('home-search');
+  const previous = global.window;
+  try {
+    for (const action of ['cancel', 'replace', 'close']) {
+      const pending = [];
+      global.window = { shiiraAPI: { search: { query: () => new Promise(resolve => pending.push(resolve)), cancel: async () => {} } } };
+      const browser = browserState(HomeSearchMixin);
+      const first = browser.performHomeSearch('old query', 'scira');
+      if (action === 'cancel') browser.cancelHomeSearch(browser.tabs[0]);
+      if (action === 'replace') {
+        const replacement = browser.performHomeSearch('new query', 'duckduckgo');
+        pending[1](result('new query'));
+        await replacement;
+      }
+      if (action === 'close') browser.tabs = [];
+      pending[0]({ success: false, code: 'provider_error' });
+      await first;
+      assert.equal(browser.navigations.length, 0);
+    }
+  } finally { global.window = previous; }
+});
+
+test('background fallback creates a private webview without changing the active page chrome', async () => {
+  const { NavigationMixin } = await load('navigation');
+  const updates = [];
+  const webview = { style: {}, classList: { add: value => updates.push(value) } };
+  const browser = { ...NavigationMixin, activeTabId: 'other', currentBrightness: 100, urlInput: { value: 'keep this URL' },
+    welcomePage: { classList: { add: value => updates.push(value) } }, updateSecurityIndicator: () => updates.push('security'),
+    createTabWebview(id, privateMode) { assert.equal(id, 'source'); assert.equal(privateMode, true); return webview; } };
+  const tab = { id: 'source', isHome: true, privateMode: true, element: { dataset: {}, querySelector: () => null } };
+  browser.createWebviewForHomeTab(tab, 'https://scira.ai/?q=background');
+  assert.deepEqual(updates, []);
+  assert.equal(browser.urlInput.value, 'keep this URL');
+  assert.equal(tab.isHome, false);
+  assert.equal(webview.src, tab.url);
+  assert.deepEqual(tab.navigationHistory, ['https://scira.ai/?q=background']);
+});
+
+test('one provider-chip click immediately runs the entered query and switches the selected provider', async () => {
+  const { HomeSearchMixin } = await load('home-search');
+  const calls = [];
+  const previous = global.window;
+  global.window = { shiiraAPI: { search: { query: async request => { calls.push(request); return result(request.query); }, cancel: async () => {} } } };
+  try {
+    const browser = browserState(HomeSearchMixin);
+    browser.currentSearchEngine = 'scira';
+    browser.homeSearch.value = 'web browser';
+    await browser.selectHomeSearchProvider('duckduckgo');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].provider, 'duckduckgo');
+    assert.equal(calls[0].query, 'web browser');
+    assert.equal(browser.currentSearchEngine, 'duckduckgo');
+    assert.equal(browser.tabs[0].searchState.status, 'done');
+  } finally { global.window = previous; }
+});
+
+test('fallback searches update the engine and repeated clicks do not duplicate an in-flight query', async () => {
+  const { HomeSearchMixin } = await load('home-search');
+  const calls = [];
+  let finish;
+  const previous = global.window;
+  global.window = { shiiraAPI: { search: { query: request => { calls.push(request); return new Promise(resolve => { finish = resolve; }); }, cancel: async () => {} } } };
+  try {
+    const browser = browserState(HomeSearchMixin);
+    browser.currentSearchEngine = 'scira';
+    const first = browser.performHomeSearch('web browser', 'duckduckgo');
+    await browser.performHomeSearch('web browser', 'duckduckgo');
+    assert.equal(calls.length, 1);
+    assert.equal(browser.currentSearchEngine, 'duckduckgo');
+    finish(result('web browser'));
+    await first;
+  } finally { global.window = previous; }
+});
 
 test('a late search response cannot replace a newer search or another tab’s results', async () => {
   const { HomeSearchMixin } = await load('home-search');

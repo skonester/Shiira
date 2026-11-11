@@ -12,6 +12,16 @@ export function searchUrl(query, engine = 'brave', mode = 'web') {
   return `shiira://search?${new URLSearchParams({ q: query.trim(), engine: normalizeSearchEngine(engine), mode })}`;
 }
 
+export function websiteSearchUrl(query, provider) {
+  if (typeof query !== 'string' || !query.trim()) return null;
+  const endpoint = { brave: 'https://search.brave.com/search', scira: 'https://scira.ai/' };
+  if (!Object.hasOwn(endpoint, provider)) return null;
+  const url = new URL(endpoint[provider]);
+  url.searchParams.set('q', query.trim());
+  if (provider === 'brave') url.searchParams.set('source', 'web');
+  return url.href;
+}
+
 export function parseSearchUrl(value) {
   try {
     const url = new URL(value);

@@ -68,7 +68,7 @@ Shiira is built for people who want a browser that feels like *their* workspace.
 - Chrome bookmark import and **Arc migration** from a local installation or copied Arc folder: spaces, nested pinned tabs, all profiles' favorites, optional Today tabs and history, archived tabs, and cached icons. Favorites and history merge into Shiira's shared browsing session.
 - **Tab to Search** in the command bar: type a site such as `youtube` or `github`, press `Tab`, then enter your query. Search archived tabs too, or use `Shift+Enter` to open a webpage result in split view. Brave, Scira and DuckDuckGo shortcuts use Shiira's internal search tab.
 - Manifest V3 **Chrome extensions** from the Chrome Web Store.
-- Search inside the home tab with **Brave Search API**, **Scira AI API** (Web, Reddit, X, and People), or **DuckDuckGo Quick** instant answers. Add Brave and Scira keys in **Settings → Search**; keys stay in the operating system keychain. See [search setup](docs/search.md).
+- Search inside the home tab with **Brave Search API**, **Scira AI API** (Web, Reddit, X, and People), or **DuckDuckGo Quick** instant answers. Add Brave and Scira keys in **Settings → Search**; keys stay in the operating system keychain. Brave and Scira automatically search their websites in the same tab if their APIs fail. See [search setup](docs/search.md).
 - Bookmarks bar, favorites launcher, searchable history, RSS, and session restore.
 - Cache, cookies, site storage, downloads, permissions, passwords, and update controls.
 

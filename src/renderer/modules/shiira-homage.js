@@ -47,7 +47,7 @@ export const ShiiraHomageMixin = {
     });
 
     document.querySelectorAll('.search-engine-chip').forEach(button => {
-      button.addEventListener('click', () => this.selectSearchEngine(button.dataset.engine));
+      button.addEventListener('click', () => void this.selectHomeSearchProvider(button.dataset.engine));
     });
     this.updateSearchEngineUI();
     this.initHomeSearch();

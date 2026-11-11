@@ -10,7 +10,9 @@ const safeUrl = value => {
 };
 const text = (value, max = 10000) => typeof value === 'string' ? value.slice(0, max) : '';
 class SearchError extends Error {
-  constructor(code, message) { super(message); this.code = code; }
+  constructor(code, message, { status, requestId } = {}) {
+    super(message); this.code = code; this.status = status; this.requestId = requestId;
+  }
 }
 
 function validateRequest(input) {
@@ -105,14 +107,8 @@ class SearchService {
     } catch { return { success: false, error: 'The API key could not be saved in the system keychain.' }; }
   }
 
-  async json(url, options, signal) {
-    const response = await this.fetch(url, { ...options, redirect: 'error', signal });
-    if (!response.ok) {
-      if (response.status === 401 || response.status === 403) throw new SearchError('authentication', 'The API key is invalid or does not have access to this endpoint. Check Search settings.');
-      if (response.status === 429) throw new SearchError('rate_limit', 'The provider’s request limit has been reached. Try again later or choose another provider.');
-      throw new SearchError('provider_error', 'The search provider could not complete this request. Try again.');
-    }
-    if (!/\bjson\b/i.test(response.headers.get('content-type') || '')) throw new SearchError('invalid_response', 'The search provider returned an unreadable response.');
+  async readBody(response, maxBytes = MAX_BYTES) {
+    if (!response.body) return '';
     const reader = response.body.getReader();
     const chunks = [];
     let size = 0;
@@ -121,12 +117,48 @@ class SearchService {
         const { done, value } = await reader.read();
         if (done) break;
         size += value.byteLength;
-        if (size > MAX_BYTES) { await reader.cancel(); throw new SearchError('invalid_response', 'The search response was too large. Try a more focused query.'); }
+        if (size > maxBytes) { await reader.cancel(); throw new SearchError('invalid_response', 'The search response was too large. Try a more focused query.'); }
         chunks.push(Buffer.from(value));
       }
-      try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
-      catch { throw new SearchError('invalid_response', 'The search provider returned invalid JSON.'); }
+      return Buffer.concat(chunks).toString('utf8');
     } finally { reader.releaseLock(); }
+  }
+
+  async json(url, options, signal) {
+    const response = await this.fetch(url, { ...options, redirect: 'error', signal });
+    const host = new URL(url).hostname;
+    const provider = host === 'api.scira.ai' ? 'Scira' : host === 'api.search.brave.com' ? 'Brave Search' : 'DuckDuckGo Quick';
+    const secrets = Object.entries(options?.headers || {}).filter(([name]) => /^(x-api-key|x-subscription-token|authorization)$/i.test(name))
+      .flatMap(([, value]) => [String(value), String(value).replace(/^Bearer\s+/i, '')]).filter(Boolean);
+    const redact = value => secrets.reduce((out, secret) => out.replaceAll(secret, '[redacted]'), value);
+    const rawRequestId = redact(response.headers.get('x-request-id') || response.headers.get('x-vercel-id') || '');
+    const requestId = /^[a-z0-9:_.-]{1,200}$/i.test(rawRequestId) ? rawRequestId : undefined;
+    const context = { status: response.status, requestId };
+    if (!response.ok) {
+      let detail = '';
+      try {
+        const data = JSON.parse(await this.readBody(response, 64 * 1024));
+        const message = typeof data.error === 'string' ? data.error : data.error?.message || data.message;
+        if (typeof message === 'string') detail = redact(message).replace(/<[^>]*>/g, '').replace(/[\x00-\x1f\x7f]/g, ' ').slice(0, 400).trim();
+      } catch { /* Empty/non-JSON server errors still retain their HTTP status. */ }
+      if (response.status === 401 || response.status === 403) throw new SearchError('authentication', `${provider} rejected the API credentials (HTTP ${response.status}). Check the key and endpoint access in Search settings.`, context);
+      if (response.status === 429) throw new SearchError('rate_limit', `${provider} reached its request limit (HTTP 429). Try again later or choose another provider.`, context);
+      const reason = response.status >= 500 ? 'returned a server error' : 'rejected this request';
+      throw new SearchError('provider_error', `${provider} API ${reason} (HTTP ${response.status}).${detail ? ` ${detail}` : ''} ${response.status >= 500 ? 'Try again later or choose another provider.' : 'Check the request and try again.'}`, context);
+    }
+    const contentType = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    // DuckDuckGo's real Instant Answer endpoint serves JSON under this legacy
+    // JavaScript MIME type. Parse it as JSON only; never evaluate JavaScript/JSONP.
+    const duckJson = host === 'api.duckduckgo.com' && /^(application\/(?:x-)?javascript|text\/javascript)$/.test(contentType);
+    if (!/^(application|text)\/(?:[a-z0-9.+-]+\+)?json$/.test(contentType) && !duckJson) {
+      await response.body?.cancel();
+      throw new SearchError('invalid_response', `${provider} returned an unsupported response type.`, context);
+    }
+    try { return JSON.parse(await this.readBody(response)); }
+    catch (error) {
+      if (error instanceof SearchError) throw error;
+      throw new SearchError('invalid_response', `${provider} returned invalid JSON.`, context);
+    }
   }
 
   cancel(owner, id) { this.active.get(`${owner}:${id}`)?.abort(); }
@@ -171,7 +203,9 @@ class SearchService {
       return { success: true, result: normalizeResponse(provider, data, query, mode, page) };
     } catch (error) {
       if (controller.signal.aborted) return { success: false, code: expired ? 'timeout' : 'canceled', error: expired ? 'Search took too long. Try again.' : 'Search canceled.' };
-      return { success: false, code: error instanceof SearchError ? error.code : 'network', error: error instanceof SearchError ? error.message : 'The search provider could not be reached. Check your connection and try again.' };
+      return { success: false, code: error instanceof SearchError ? error.code : 'network',
+        status: error instanceof SearchError ? error.status : undefined, requestId: error instanceof SearchError ? error.requestId : undefined,
+        error: error instanceof SearchError ? error.message : 'The search provider could not be reached. Check your connection and try again.' };
     } finally {
       clearTimeout(timer);
       if (this.active.get(token) === controller) this.active.delete(token);

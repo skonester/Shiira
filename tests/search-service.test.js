@@ -69,6 +69,44 @@ test('DuckDuckGo Quick needs no key and flattens related topics safely', async (
   assert.equal(response.result.results.length, 2);
 });
 
+test('DuckDuckGo’s real JavaScript MIME type still contains JSON and succeeds on the first request', async () => {
+  let calls = 0;
+  const service = new SearchService({ env: {}, fetchImpl: async () => {
+    calls++;
+    return new Response(JSON.stringify({ AbstractText: 'A browser is an application.', AbstractURL: 'https://example.com/browser', Heading: 'Browser' }), { headers: { 'content-type': 'application/x-javascript; charset=utf-8' } });
+  } });
+  const response = await service.search(3, request('duckduckgo'));
+  assert.equal(response.success, true);
+  assert.equal(response.result.answer, 'A browser is an application.');
+  assert.equal(calls, 1);
+});
+
+test('legacy DuckDuckGo content types never execute JavaScript or JSONP', async () => {
+  const service = new SearchService({ env: {}, fetchImpl: async () => new Response('callback({"AbstractText":"not JSON"});', { headers: { 'content-type': 'application/x-javascript' } }) });
+  assert.equal((await service.search(3, request('duckduckgo'))).code, 'invalid_response');
+  const brave = new SearchService({ env, fetchImpl: async () => new Response('{"web":{"results":[]}}', { headers: { 'content-type': 'application/x-javascript' } }) });
+  assert.equal((await brave.search(3, request('brave'))).code, 'invalid_response');
+});
+
+test('Scira’s live empty HTTP 500 shape retains the provider, status and support request ID', async () => {
+  const service = new SearchService({ env, fetchImpl: async () => new Response(null, { status: 500, headers: { 'x-vercel-id': 'cle1::fra1::request-123' } }) });
+  const response = await service.search(3, request('scira'));
+  assert.equal(response.success, false);
+  assert.equal(response.status, 500);
+  assert.equal(response.requestId, 'cle1::fra1::request-123');
+  assert.match(response.error, /Scira API returned a server error \(HTTP 500\)/);
+  assert.equal(response.code, 'provider_error');
+});
+
+test('provider validation details are visible without exposing reflected credentials', async () => {
+  const service = new SearchService({ env, fetchImpl: async () => json({ error: `Missing messages; credential ${env.SCIRA_API_KEY}` }, 400) });
+  const response = await service.search(3, request('scira'));
+  assert.match(response.error, /HTTP 400/);
+  assert.match(response.error, /Missing messages/);
+  assert.equal(response.error.includes(env.SCIRA_API_KEY), false);
+  assert.match(response.error, /\[redacted\]/);
+});
+
 test('missing keys produce a setup response and never call a search webpage or another provider', async () => {
   let count = 0;
   const service = new SearchService({ env: {}, fetchImpl: async () => { count++; throw new Error('Should not send'); } });

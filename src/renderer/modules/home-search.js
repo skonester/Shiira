@@ -1,4 +1,6 @@
-import { SEARCH_ENGINES, normalizeSearchEngine, searchUrl, safeResultUrl } from './search-model.js';
+import { SEARCH_ENGINES, normalizeSearchEngine, searchUrl, safeResultUrl, websiteSearchUrl } from './search-model.js';
+
+const WEBSITE_FALLBACK_ERRORS = new Set(['missing_key', 'authentication', 'rate_limit', 'provider_error', 'timeout', 'network', 'invalid_response', 'unavailable', 'busy']);
 
 export const HomeSearchMixin = {
   initHomeSearch() {
@@ -10,7 +12,20 @@ export const HomeSearchMixin = {
     document.getElementById('home-search-submit')?.addEventListener('click', () => {
       if (this.homeSearch.value.trim()) void this.performHomeSearch(this.homeSearch.value.trim());
     });
+    this.searchScope?.addEventListener('change', () => {
+      const query = this.homeSearch.value.trim();
+      if (query) void this.performHomeSearch(query, 'scira', { mode: this.searchScope.value });
+    });
     this.initSearchCredentials();
+  },
+
+  async selectHomeSearchProvider(provider) {
+    if (!Object.hasOwn(SEARCH_ENGINES, provider)) return;
+    this.selectSearchEngine(provider);
+    const tab = this.tabs.find(tab => tab.id === this.activeTabId);
+    const query = this.homeSearch.value.trim() || tab?.searchState?.query || '';
+    if (query) await this.performHomeSearch(query, provider);
+    else this.homeSearch.focus();
   },
 
   createSearchTab(query, options = {}) {
@@ -29,6 +44,12 @@ export const HomeSearchMixin = {
     if (!tab?.isHome) return this.createSearchTab(query, { provider, mode, privateMode: tab?.privateMode === true });
     provider = normalizeSearchEngine(provider);
     if (provider !== 'scira') mode = 'web';
+    const sameRequest = tab.searchState;
+    if (sameRequest?.status === 'loading' && sameRequest.query === query.trim() && sameRequest.provider === provider && sameRequest.mode === mode && sameRequest.page === page) return;
+    // Provider chips, fallback buttons, restored tabs and the query input share
+    // one source of truth. A fallback must not leave Scira selected in the UI.
+    this.selectSearchEngine?.(provider);
+    if (this.searchScope) this.searchScope.value = mode;
     const old = tab.searchState;
     if (old?.requestId) void window.shiiraAPI.search.cancel(old.requestId);
     this.homeSearchSequence = (this.homeSearchSequence || 0) + 1;
@@ -57,16 +78,27 @@ export const HomeSearchMixin = {
       state.status = response.code === 'canceled' ? 'canceled' : 'error';
       state.error = response.error;
       state.code = response.code;
+      state.httpStatus = response.status;
+      state.providerRequestId = response.requestId;
     }
     state.requestId = null;
-    if (this.activeTabId === tab.id) this.renderHomeSearch(tab);
+    const fallbackUrl = !response.success && WEBSITE_FALLBACK_ERRORS.has(response.code) ? websiteSearchUrl(state.query, provider) : null;
+    if (fallbackUrl) {
+      // Convert the request's own tab, even if the user switched tabs while it
+      // was running. Clearing searchState prevents stale replies or retry loops.
+      this.createWebviewForHomeTab(tab, fallbackUrl);
+    } else if (this.activeTabId === tab.id) this.renderHomeSearch(tab);
     void this.saveSession?.();
   },
 
   restoreHomeSearch(tab) {
     if (!this.searchPanel) return;
     this.homeSearch.value = tab?.searchState?.query || '';
-    if (tab?.searchState) this.urlInput.value = tab.url;
+    if (tab?.searchState) {
+      this.urlInput.value = tab.url;
+      this.selectSearchEngine?.(tab.searchState.provider);
+      if (this.searchScope) this.searchScope.value = tab.searchState.mode || 'web';
+    }
     this.renderHomeSearch(tab);
     if (tab?.searchState?.status === 'idle') void this.performHomeSearch(tab.searchState.query, tab.searchState.provider, { mode: tab.searchState.mode });
   },
@@ -94,7 +126,10 @@ export const HomeSearchMixin = {
       return;
     }
     if (state.status === 'restored') paragraph('Your search was restored. Run it again to fetch fresh results.');
-    else if (state.status === 'error' || state.status === 'canceled') paragraph(state.error || 'Search canceled.', 'home-search-message');
+    else if (state.status === 'error' || state.status === 'canceled') {
+      paragraph(state.error || 'Search canceled.', 'home-search-message');
+      if (state.providerRequestId) paragraph(`Request ID: ${state.providerRequestId}`, 'home-search-note');
+    }
     const result = state.result;
     if (result) {
       if (result.correctedQuery) paragraph(`Showing results for ${result.correctedQuery}`, 'home-search-note');

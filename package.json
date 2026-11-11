@@ -1,6 +1,6 @@
 {
   "name": "shiira-browser",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Shiira - A super dark browser inspired by the classic Shiira project",
   "main": "src/main/main.js",
   "scripts": {

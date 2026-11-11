@@ -46,14 +46,22 @@ export const NavigationMixin = {
       iconElement.src = '';
     }
     
-    this.welcomePage.classList.add('hidden');
-    webview.classList.add('active');
+    const isActive = this.activeTabId === tab.id;
+    if (isActive) {
+      this.welcomePage.classList.add('hidden');
+      webview.classList.add('active');
+      this.btnBookmark?.classList.remove('disabled');
+    }
     
     webview.src = url;
     tab.url = url;
     this.recordTabNavigation(tab, url);
-    this.urlInput.value = url;
-    this.updateSecurityIndicator(url);
+    if (isActive) {
+      this.urlInput.value = url;
+      this.updateSecurityIndicator(url);
+      this.updateBookmarkIconState?.(url);
+      this.updateNavigationButtons();
+    }
   },
 
   processUrl(input) {
