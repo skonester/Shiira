@@ -21,6 +21,8 @@ exports.default = async function(context) {
   try {
     await rcedit(exePath, {
       icon: iconPath,
+      'file-version': context.packager.appInfo.buildVersion,
+      'product-version': context.packager.appInfo.version,
       'version-string': {
         ProductName: 'Shiira Browser',
         FileDescription: 'Shiira Browser',

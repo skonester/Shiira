@@ -36,7 +36,7 @@
 | | |
 | --- | --- |
 | **Engine** | Chromium via Electron |
-| **Release** | `0.3.5` |
+| **Release** | `0.3.8` |
 | **Platforms** | Windows · macOS · Linux |
 | **License** | GPL-3.0-only |
 | **Best for** | Tab-heavy workflows, customization, and focused browsing |
@@ -75,24 +75,21 @@ Shiira is built for people who want a browser that feels like *their* workspace.
 ### Privacy without ceremony
 
 - Network and cosmetic ad blocking powered by a bundled filtering engine.
-- Compatibility-safe filtering for YouTube and video-heavy sites.
+- Litube-style direct YouTube playback with adaptive buffering, source recovery, and a built-in YouTube-player fallback. See [YouTube playback](docs/youtube-playback.md).
 - Private tabs that keep extensions disabled.
 - Optional clear-on-exit cache behavior and straightforward browsing-data controls.
 - Password storage backed by the operating system keychain.
 
-## Latest release — `0.3.5`
+## Latest release — `0.3.8`
 
-The current release adds the Arc-style vertical sidebar and Chrome extension support, while keeping the classic top tab bar available in **Settings → Look and Feel**.
+Version 0.3.8 includes the settings and search fixes. Scira website searches keep the selected Web, Reddit or X source, including searches without an API key. Scira API issues remain under investigation; API failures open Scira's website in the same tab.
 
 <details>
 <summary><strong>See what changed</strong></summary>
 
-- Spaces with independent names, emoji, colors, and tab sets.
-- Shared favorites, pinned tabs, folders, and archived Today tabs.
-- Command bar (`Ctrl+T`) for opening sites, searching, and jumping between tabs or spaces.
-- Split view, Peek, tab sleep, and Arc import.
-- Chrome Web Store extensions with capability previews and private-tab protection.
-- A more reliable Ghostery-powered ad-blocking session and one-time-per-page blocking scripts.
+- Saved homepage settings apply to Home, new tabs and startup when a previous session is not restored.
+- Search key saves are confirmed through the operating system keychain and remain available after restart.
+- Scira website searches initialize the selected source before submitting, instead of inheriting the website's default Web source.
 
 </details>
 

@@ -79,7 +79,7 @@ export const ShiiraHomageMixin = {
 
   buildSearchUrl(query) {
     const trimmed = (query || '').trim();
-    return searchUrl(trimmed, this.currentSearchEngine);
+    return searchUrl(trimmed, this.currentSearchEngine, this.getSearchMode?.(this.currentSearchEngine) || 'web');
   },
 
   toggleShiiraDrawer() {

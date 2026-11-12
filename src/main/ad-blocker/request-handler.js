@@ -7,6 +7,7 @@ const { app, session, ipcMain } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { ElectronBlocker } = require('@ghostery/adblocker-electron');
+const { isYouTubeUrl, isYouTubePlaybackRequest } = require('../../shared/youtube');
 
 /**
  * Wraps a scriptlet so it runs only once per document. The block also keeps its helper declarations
@@ -87,6 +88,12 @@ class RequestHandler {
         write: fs.promises.writeFile
       });
 
+      const filterRequest = this.ghosteryBlocker.onBeforeRequest;
+      this.ghosteryBlocker.onBeforeRequest = (details, callback) => {
+        if (isYouTubePlaybackRequest(details)) return callback({});
+        return filterRequest(details, callback);
+      };
+
       this.enableGhosteryContexts();
       console.log('[AdBlocker] Ghostery full engine enabled for ads, tracking, and annoyances');
       return true;
@@ -124,6 +131,10 @@ class RequestHandler {
     ipcMain.handle(channel, (event, url, msg) => {
       const frame = event.senderFrame;
       if (!frame || frame.isDestroyed?.()) return undefined;
+      // Litube-style playback owns YouTube. Scriptlets that wrap JSON/fetch or
+      // mutate its player can break browsing and race our stream pipeline.
+      // Trust the requesting frame's URL, never a page-supplied URL argument.
+      if (isYouTubeUrl(frame.url) || isYouTubeUrl(event.sender.mainFrame?.url)) return undefined;
       const isMainFrame = frame === event.sender.mainFrame;
       const frameEvent = {
         frameId: event.frameId,
@@ -168,6 +179,11 @@ class RequestHandler {
       if (details.url.startsWith('chrome-extension://') ||
           details.url.startsWith('devtools://') ||
           details.url.startsWith('file://')) {
+        callback({});
+        return;
+      }
+
+      if (isYouTubePlaybackRequest(details)) {
         callback({});
         return;
       }

@@ -7,11 +7,11 @@ const env = { ...process.env };
 // test needs Electron's browser process rather than its Node-only mode.
 delete env.ELECTRON_RUN_AS_NODE;
 const kind = process.argv[2] || 'arc';
-if (!['arc', 'search'].includes(kind)) throw new Error('Unknown smoke test');
+if (!['arc', 'search', 'scira-website', 'youtube'].includes(kind)) throw new Error('Unknown smoke test');
 const resultFile = path.resolve(__dirname, `../tmp/${kind}-smoke/result.json`);
 fs.rmSync(resultFile, { force: true });
 const child = spawnSync(require('electron'), [path.join(__dirname, `electron-${kind}-smoke.cjs`)], {
-  env, stdio: 'inherit', windowsHide: true, timeout: 60000
+  env, stdio: 'inherit', windowsHide: true, timeout: kind === 'youtube' && env.SHIIRA_YOUTUBE_LIVE === '1' ? 120000 : 60000
 });
 if (fs.existsSync(resultFile)) {
   const result = JSON.parse(fs.readFileSync(resultFile, 'utf8'));

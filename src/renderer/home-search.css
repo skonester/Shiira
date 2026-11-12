@@ -54,6 +54,7 @@
   cursor: pointer;
 }
 .home-search-action:hover { border-color: var(--accent); }
+.home-search-action:disabled { opacity: .5; cursor: wait; }
 .home-search-action:focus-visible,
 .home-search-submit:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .settings-group input[type="password"] { width: min(100%, 430px); box-sizing: border-box; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary); }
@@ -65,3 +66,12 @@
   .search-engine-chips { gap: 5px; }
   .search-engine-chip { font-size: 11px; padding: 0 8px; }
 }
+/* Keep provider failures visible after switching to the website fallback. */
+.search-fallback-notice {
+  position: absolute; top: 12px; left: 12px; right: 12px; z-index: 300;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg-secondary); color: var(--text-primary); font-size: 13px;
+  box-shadow: 0 4px 20px #0005;
+}
+.search-fallback-notice span { flex: 1 1 220px; overflow-wrap: anywhere; }

@@ -1,0 +1,30 @@
+Litube / MediaServiceCore playback adaptation
+
+Upstream projects:
+  https://github.com/HydeYYHH/litube (v4.0.0)
+  https://github.com/HydeYYHH/MediaServiceCore
+  (PlayerClientQueues.kt at 68f2f6a10dedf0842cbc99fa79d84bf1bfd9b21f)
+
+Shiira's src/main/youtube-service.js and src/preload/youtube-player.js adapt
+the playback approach in Litube's Extractor.kt, MscPlayback.kt,
+VideoId.kt, PlaybackLoadErrorPolicy.kt and MediaServiceCore's
+PlayerClientQueues.kt: a VisionOS-first direct-stream queue, shared extraction,
+short-lived stream caching, stale-write guards, deferred/rejected clients and
+bounded fresh-source recovery. The Kotlin/Media3 implementation has been
+reworked for Electron/JavaScript, YouTube.js and Shaka Player. Android binaries
+and the complete MediaServiceCore library are not bundled.
+
+Litube and MediaServiceCore are distributed under the GNU General Public
+License, version 3. Shiira's adaptation is distributed under GPL-3.0-only.
+The full license is included in GPL-3.0.txt in this directory and in the
+repository LICENSE. Original authorship belongs to the respective Litube,
+MediaServiceCore and SmartTube contributors; Shiira's modifications were made
+in 2026.
+
+This software is distributed WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+YouTube.js (LuanRT) supplies the JavaScript InnerTube and signature adapters
+under the MIT License; see youtubei-MIT.txt. Shaka Player supplies the
+Chromium DASH/HLS player; its upstream license text, including the Apache 2.0
+terms and bundled component notices, is in shaka-player-LICENSE.txt.

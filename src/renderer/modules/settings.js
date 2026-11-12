@@ -1,4 +1,5 @@
 // Zenium-inspired first-run setup and settings, using Shiira's existing preference methods.
+import { normalizeHomepage } from './homepage.js';
 
 const SETUP_THEMES = [
   ['shiira-night', 'Shiira Night'], ['shiira-pearl', 'Shiira Pearl'],
@@ -8,16 +9,6 @@ const SETUP_THEMES = [
 ];
 
 const SETUP_SEARCH = [['brave', 'Brave Search'], ['duckduckgo', 'DuckDuckGo Quick'], ['scira', 'Scira AI']];
-
-function normalizeHomepage(value) {
-  const input = String(value || '').trim();
-  if (!input) return null;
-  try {
-    const url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(input) ? input : `https://${input}`);
-    if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password) return null;
-    return url.href;
-  } catch { return null; }
-}
 
 function setStatus(id, message) {
   const element = document.getElementById(id);
@@ -60,7 +51,7 @@ export const SettingsMixin = {
     document.getElementById('settings-reset-homepage')?.addEventListener('click', () => {
       localStorage.removeItem('shiira-homepage-url');
       document.getElementById('settings-homepage').value = '';
-      setStatus('settings-homepage-status', 'The Home button opens Shiira’s home page.');
+      setStatus('settings-homepage-status', 'Home and new tabs now open Shiira’s home page.');
     });
     document.getElementById('settings-restore-session')?.addEventListener('change', async event => {
       const enabled = event.target.checked;
@@ -268,7 +259,8 @@ export const SettingsMixin = {
     const input = document.getElementById('settings-homepage');
     if (!input.value.trim()) {
       localStorage.removeItem('shiira-homepage-url');
-      setStatus('settings-homepage-status', 'The Home button opens Shiira’s home page.');
+      input.value = '';
+      setStatus('settings-homepage-status', 'Home and new tabs now open Shiira’s home page.');
       return;
     }
     const url = normalizeHomepage(input.value);
@@ -278,7 +270,7 @@ export const SettingsMixin = {
     }
     localStorage.setItem('shiira-homepage-url', url);
     input.value = url;
-    setStatus('settings-homepage-status', 'Home page saved.');
+    setStatus('settings-homepage-status', 'Saved. Home and new tabs now open this page. Restored tabs keep their saved pages.');
   },
 
   async loadBrowserSettings() {

@@ -166,7 +166,7 @@ class ShiiraBrowser {
       }
     }).catch(err => {
       console.error('[Session] Restore failed in background:', err);
-      if (!this.activeTabId) this.createHomeTab();
+      if (!this.activeTabId) this.createTab();
     });
 
     // Set up session save on window close

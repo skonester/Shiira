@@ -7,27 +7,39 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const { randomBytes } = require('node:crypto');
 const { pathToFileURL } = require('node:url');
+const appRoot = process.env.SHIIRA_SEARCH_SMOKE_APP_ROOT || path.resolve(__dirname, '..');
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'shiira-electron-search-'));
+if (path.extname(appRoot) === '.asar') {
+  Object.defineProperty(app, 'isPackaged', { value: true });
+  Object.defineProperty(process, 'resourcesPath', { value: path.dirname(appRoot) });
+  app.getAppPath = () => appRoot;
+  fs.writeFileSync(path.join(root, 'browser-settings.json'), JSON.stringify({ autoCheckUpdates: false }));
+}
 const artifacts = path.resolve(__dirname, '../tmp/search-smoke');
 fs.mkdirSync(artifacts, { recursive: true });
 app.setPath('userData', root);
 app.setPath('sessionData', root);
 app.on('browser-window-created', (_event, win) => { win.setSkipTaskbar(true); win.on('show', () => win.hide()); });
-require('../src/main/password-service').prototype.initializeEncryption = async function () { this.encryptionKey = randomBytes(32); };
+require(path.join(appRoot, 'src/main/password-service')).prototype.initializeEncryption = async function () { this.encryptionKey = randomBytes(32); };
 const keys = new Map();
 const calls = [];
 let sciraServerError = false;
+let sciraAuthError = false;
 let braveAuthError = false;
-const search = require('../src/main/search-service');
+const search = require(path.join(appRoot, 'src/main/search-service'));
 const OriginalSearchService = search.SearchService;
 search.SearchService = class extends OriginalSearchService {
-  constructor() {
-    super({ env: {}, keychain: {
+  constructor(options) {
+    assert.equal(typeof options?.fetchImpl, 'function', 'The app must inject its Electron network transport');
+    super({ ...options, env: {}, keychain: {
       getPassword: async (_service, provider) => keys.get(provider),
       setPassword: async (_service, provider, key) => keys.set(provider, key),
       deletePassword: async (_service, provider) => keys.delete(provider)
-    }, fetchImpl: async (url, options) => {
-      calls.push({ url });
+    } });
+  }
+};
+async function providerResponse(url, options) {
+      calls.push({ url, body: options.body ? JSON.parse(options.body) : null });
       const parsed = new URL(url);
       let data;
       if (parsed.hostname === 'api.search.brave.com') {
@@ -41,20 +53,35 @@ search.SearchService = class extends OriginalSearchService {
         ] } };
       } else if (parsed.hostname === 'api.scira.ai') {
         assert.equal(options.headers['x-api-key'], 'fixture-scira-key');
-        if (sciraServerError) return new Response(null, { status: 500, headers: { 'x-vercel-id': 'cle1::fra1::fixture-failure' } });
-        data = { text: '## A calmer way to browse\n\nKeep related projects in separate spaces. Pin the pages you return to, and use temporary tabs for the rest.\n\nThese sources explain browser workflows and privacy controls.',
+        if (sciraAuthError) return new Response('{}', { status: 401, headers: { 'content-type': 'application/json' } });
+        const mode = { '/api/search': 'web', '/api/reddit': 'reddit', '/api/xsearch': 'x', '/api/people': 'people' }[parsed.pathname];
+        if (sciraServerError === true || sciraServerError === mode) return new Response(null, { status: 500, headers: { 'x-vercel-id': 'cle1::fra1::fixture-failure' } });
+        data = mode === 'people' ? { profile: { name: 'Fixture person', bio: 'Researcher', website: 'https://example.com/' } } : { text: '## A calmer way to browse\n\nKeep related projects in separate spaces. Pin the pages you return to, and use temporary tabs for the rest.\n\nThese sources explain browser workflows and privacy controls.',
           sources: ['https://example.com/browser', 'https://example.org/privacy'],
           results: [{ url: 'https://example.com/browser', title: 'Browser workflows people recommend', excerpt: 'A discussion of spaces, pinned tabs and everyday browsing.' }] };
       } else if (parsed.hostname === 'api.duckduckgo.com') {
         data = { Heading: 'Web browser', AbstractText: 'A web browser retrieves and presents information on the web.', AbstractURL: 'https://en.wikipedia.org/wiki/Web_browser' };
       } else throw new Error('Unexpected provider request');
       return new Response(JSON.stringify(data), { headers: { 'content-type': parsed.hostname === 'api.duckduckgo.com' ? 'application/x-javascript' : 'application/json' } });
-    } });
-  }
-};
-require('../src/main/main');
+}
+process.on('unhandledRejection', error => finish(error));
+require(path.join(appRoot, 'src/main/main'));
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-async function clickOnce(win, expression) {
+async function waitFor(win, expression) {
+  for (let n = 0; n < 100; n++) {
+    if (await win.webContents.executeJavaScript(expression)) return;
+    await delay(50);
+  }
+  const state = await win.webContents.executeJavaScript(`({ focus: document.activeElement?.id, scope: window.ShiiraBrowser.searchScope?.value, savedScope: window.ShiiraBrowser.sciraSearchMode, status: window.ShiiraBrowser.tabs.find(t => t.id === window.ShiiraBrowser.activeTabId)?.searchState?.status })`);
+  throw new Error(`Search state did not settle: ${expression}; ${JSON.stringify(state)}`);
+}
+async function press(win, keyCode, completed) {
+  keyCode = keyCode.replace(/^Arrow/, '');
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode });
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode });
+  await waitFor(win, completed);
+}
+async function clickOnce(win, expression, completed = `window.ShiiraBrowser.tabs.find(t => t.id === window.ShiiraBrowser.activeTabId)?.searchState?.status === 'done'`) {
   const point = await win.webContents.executeJavaScript(`(() => {
     const button = ${expression};
     if (!button) throw new Error('Search button was not found');
@@ -66,11 +93,11 @@ async function clickOnce(win, expression) {
   win.webContents.sendInputEvent({ type: 'mouseDown', button: 'left', clickCount: 1, ...point });
   win.webContents.sendInputEvent({ type: 'mouseUp', button: 'left', clickCount: 1, ...point });
   for (let n = 0; n < 40; n++) {
-    const done = await win.webContents.executeJavaScript(`window.ShiiraBrowser.tabs.find(t => t.id === window.ShiiraBrowser.activeTabId)?.searchState?.status === 'done'`);
+    const done = await win.webContents.executeJavaScript(completed);
     if (done) return;
     await delay(50);
   }
-  throw new Error('One click did not complete the provider search');
+  throw new Error('One click did not complete the action');
 }
 const deadline = setTimeout(() => finish(new Error('Search smoke timed out')), 45000);
 function finish(error, details = {}) {
@@ -85,7 +112,7 @@ async function capture(win, name, width = 1280, height = 800) {
     document.querySelectorAll('option').forEach(option => option.toggleAttribute('selected', option.selected));
     return document.documentElement.outerHTML;
   })()`);
-  const base = pathToFileURL(path.resolve(__dirname, '../src/renderer') + path.sep).href;
+  const base = pathToFileURL(path.join(appRoot, 'src/renderer') + path.sep).href;
   const file = path.join(artifacts, `${name}.html`);
   fs.writeFileSync(file, markup.replace('<head>', `<head><base href="${base}">`).replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ''));
   const preview = new BrowserWindow({ width, height, show: false, webPreferences: { offscreen: true } });
@@ -96,6 +123,14 @@ async function capture(win, name, width = 1280, height = 800) {
 }
 app.whenReady().then(async () => {
   try {
+    // Intercept only the API partition. Requests still pass through the app's
+    // real Electron session.fetch transport, without contacting live providers.
+    session.fromPartition('search-api').protocol.handle('https', async request => {
+      assert.equal(request.headers.get('cookie'), null);
+      const headers = Object.fromEntries(request.headers);
+      headers['X-Subscription-Token'] = request.headers.get('X-Subscription-Token');
+      return providerResponse(request.url, { headers, body: request.method === 'POST' ? await request.text() : undefined });
+    });
     let win;
     for (let n = 0; n < 120; n++) {
       win = BrowserWindow.getAllWindows()[0];
@@ -121,10 +156,13 @@ app.whenReady().then(async () => {
     assert.equal(missing.removed, true);
     assert.equal(missing.status.brave.configured, false);
     assert.equal(calls.length, 0);
-    const brave = await win.webContents.executeJavaScript(`(async () => {
-      const b = window.ShiiraBrowser; b.createHomeTab();
+    await win.webContents.executeJavaScript(`(() => {
+      const b = window.ShiiraBrowser; b.showSettings('search');
       document.getElementById('search-brave-key').value = 'fixture-brave-key';
-      await b.saveSearchCredential('brave');
+    })()`);
+    await clickOnce(win, `document.getElementById('search-brave-save')`, `document.getElementById('search-brave-status').textContent.includes('in the system keychain')`);
+    const brave = await win.webContents.executeJavaScript(`(async () => {
+      const b = window.ShiiraBrowser; b.hideSettings(); b.createHomeTab();
       await b.performHomeSearch('browser workflows', 'brave');
       const tab = b.tabs.find(t => t.id === b.activeTabId);
       return { status: tab.searchState.status, results: tab.searchState.result.results.length, more: tab.searchState.result.more,
@@ -149,18 +187,60 @@ app.whenReady().then(async () => {
       const b = window.ShiiraBrowser, id = b.activeTabId, count = b.tabs.length;
       await b.performHomeSearch('browser workflows', 'brave');
       const tab = b.tabs.find(t => t.id === id);
-      return { sameTab: b.activeTabId === id && b.tabs.length === count, url: tab.url, src: tab.webview.src };
+      return { sameTab: b.activeTabId === id && b.tabs.length === count, url: tab.url, src: tab.webview.src,
+        notice: !document.getElementById('search-fallback-notice').classList.contains('hidden'),
+        message: document.getElementById('search-fallback-message').textContent };
     })()`);
     assert.equal(braveFallback.sameTab, true);
     assert.equal(braveFallback.url, 'https://search.brave.com/search?q=browser+workflows&source=web');
     assert.equal(braveFallback.src, braveFallback.url);
+    assert.equal(braveFallback.notice, true);
+    assert.match(braveFallback.message, /rejected the API credentials/);
     assert.equal(calls.length, braveErrorCalls + 1);
+    await capture(win, 'brave-api-fallback');
     braveAuthError = false;
-    const scira = await win.webContents.executeJavaScript(`(async () => {
-      const b = window.ShiiraBrowser; b.createHomeTab();
-      document.getElementById('search-scira-key').value = 'fixture-scira-key'; await b.saveSearchCredential('scira');
-      b.selectSearchEngine('scira'); b.searchScope.value = 'reddit';
+    await win.webContents.executeJavaScript(`(() => {
+      window.ShiiraBrowser.showSettings('search');
+    })()`);
+    const credentialError = await win.webContents.executeJavaScript(`(async () => {
+      await window.ShiiraBrowser.loadSearchCredentials();
+      return document.getElementById('search-brave-status').textContent;
+    })()`);
+    assert.match(credentialError, /rejected the API credentials/);
+    const beforeSetup = calls.length;
+    await win.webContents.executeJavaScript(`(() => {
+      const b = window.ShiiraBrowser; b.hideSettings(); b.createHomeTab();
+      b.selectSearchEngine('scira'); b.searchScope.value = 'web'; b.homeSearch.value = ''; b.searchScope.focus();
+    })()`);
+    await press(win, 'ArrowDown', `window.ShiiraBrowser.sciraSearchMode === 'reddit'`);
+    await win.webContents.executeJavaScript(`(() => { const b = window.ShiiraBrowser; b.homeSearch.value = 'How can I make my browser workspace calmer?'; b.homeSearch.focus(); })()`);
+    await press(win, 'Enter', `window.ShiiraBrowser.tabs.find(t => t.id === window.ShiiraBrowser.activeTabId)?.webview?.src.startsWith('https://scira.ai/') === true`);
+    const noKey = await win.webContents.executeJavaScript(`(() => {
+      const b = window.ShiiraBrowser;
+      const tab = b.tabs.find(t => t.id === b.activeTabId);
+      return { url: tab.webview.src, hasWebview: Boolean(tab.webview), isHome: tab.isHome,
+        blockedByKeyForm: Boolean(document.getElementById('home-scira-key')), settingsVisible: !b.settingsModal.classList.contains('hidden') };
+    })()`);
+    assert.equal(noKey.hasWebview, true);
+    assert.equal(noKey.isHome, false);
+    assert.equal(noKey.blockedByKeyForm, false);
+    assert.equal(noKey.settingsVisible, false);
+    assert.equal(new URL(noKey.url).hostname, 'scira.ai');
+    assert.equal(new URL(noKey.url).searchParams.get('q'), 'How can I make my browser workspace calmer?');
+    assert.equal(new URL(noKey.url).searchParams.get('group'), 'reddit');
+    assert.equal(calls.length, beforeSetup);
+    await win.webContents.executeJavaScript(`(() => {
+      const b = window.ShiiraBrowser; b.showSettings('search');
+      document.getElementById('search-scira-key').value = 'fixture-scira-key';
+    })()`);
+    await clickOnce(win, `document.getElementById('search-scira-save')`, `document.getElementById('search-scira-status').textContent.includes('in the system keychain')`);
+    await win.webContents.executeJavaScript(`(async () => {
+      const b = window.ShiiraBrowser; b.hideSettings(); b.createHomeTab();
       await b.performHomeSearch('How can I make my browser workspace calmer?', 'scira', { mode: 'reddit' });
+    })()`);
+    assert.equal(calls.length, beforeSetup + 1);
+    const scira = await win.webContents.executeJavaScript(`(async () => {
+      const b = window.ShiiraBrowser;
       return { status: b.tabs.find(t => t.id === b.activeTabId).searchState.status,
         title: b.searchBadge.textContent, cards: document.querySelectorAll('.home-search-result').length,
         safe: !document.querySelector('#ai-search-content a[href^="javascript:"]'), keys: await window.shiiraAPI.search.status() };
@@ -171,26 +251,112 @@ app.whenReady().then(async () => {
     assert.equal(scira.keys.scira.configured, true);
     assert.equal(JSON.stringify(scira).includes('fixture-scira-key'), false);
     await capture(win, 'scira-results');
+    // Select Reddit on an empty homepage using the native dropdown, then submit
+    // with Enter and with the arrow button. Assert the actual endpoint and body.
+    await win.webContents.executeJavaScript(`(() => {
+      const b = window.ShiiraBrowser; b.createHomeTab(); b.selectSearchEngine('scira');
+      b.searchScope.value = 'web'; b.homeSearch.value = ''; b.searchScope.focus();
+    })()`);
+    const scopeCalls = calls.length;
+    await press(win, 'ArrowDown', `window.ShiiraBrowser.sciraSearchMode === 'reddit'`);
+    assert.equal(calls.length, scopeCalls);
+    await win.webContents.executeJavaScript(`(() => { const b = window.ShiiraBrowser; b.homeSearch.value = 'coolgithubprojects'; b.homeSearch.focus(); })()`);
+    await press(win, 'Enter', `window.ShiiraBrowser.tabs.find(t => t.id === window.ShiiraBrowser.activeTabId)?.searchState?.query === 'coolgithubprojects' && window.ShiiraBrowser.tabs.find(t => t.id === window.ShiiraBrowser.activeTabId)?.searchState?.status === 'done'`);
+    assert.equal(new URL(calls.at(-1).url).pathname, '/api/reddit');
+    assert.deepEqual(calls.at(-1).body, { query: 'coolgithubprojects' });
+    await win.webContents.executeJavaScript(`window.ShiiraBrowser.homeSearch.value = 'cool github projects & rust'`);
+    await clickOnce(win, `document.getElementById('home-search-submit')`, `window.ShiiraBrowser.tabs.find(t => t.id === window.ShiiraBrowser.activeTabId)?.searchState?.query === 'cool github projects & rust' && window.ShiiraBrowser.tabs.find(t => t.id === window.ShiiraBrowser.activeTabId)?.searchState?.status === 'done'`);
+    assert.equal(new URL(calls.at(-1).url).pathname, '/api/reddit');
+    assert.deepEqual(calls.at(-1).body, { query: 'cool github projects & rust' });
+    await win.webContents.executeJavaScript(`window.ShiiraBrowser.searchScope.focus()`);
+    await press(win, 'ArrowDown', `window.ShiiraBrowser.tabs.find(t => t.id === window.ShiiraBrowser.activeTabId)?.searchState?.mode === 'x' && window.ShiiraBrowser.tabs.find(t => t.id === window.ShiiraBrowser.activeTabId)?.searchState?.status === 'done'`);
+    assert.equal(new URL(calls.at(-1).url).pathname, '/api/xsearch');
+    await press(win, 'ArrowDown', `window.ShiiraBrowser.tabs.find(t => t.id === window.ShiiraBrowser.activeTabId)?.searchState?.mode === 'people' && window.ShiiraBrowser.tabs.find(t => t.id === window.ShiiraBrowser.activeTabId)?.searchState?.status === 'done'`);
+    assert.equal(new URL(calls.at(-1).url).pathname, '/api/people');
+    // A new tab remembers the last choice; older tabs keep their own scope.
+    const scopeTabs = await win.webContents.executeJavaScript(`(() => {
+      const b = window.ShiiraBrowser, source = b.activeTabId;
+      b.createHomeTab(); const fresh = b.activeTabId, freshMode = b.searchScope.value;
+      b.setSciraSearchMode('reddit'); b.switchTab(source);
+      const oldMode = b.searchScope.value; b.switchTab(fresh);
+      return { freshMode, oldMode, restoredBlankMode: b.searchScope.value };
+    })()`);
+    assert.deepEqual(scopeTabs, { freshMode: 'people', oldMode: 'people', restoredBlankMode: 'reddit' });
+    await win.webContents.executeJavaScript(`(() => { const b = window.ShiiraBrowser; b.urlInput.value = 'reddit projects from the address bar'; b.urlInput.focus(); })()`);
+    await press(win, 'Enter', `window.ShiiraBrowser.tabs.find(t => t.id === window.ShiiraBrowser.activeTabId)?.searchState?.query === 'reddit projects from the address bar' && window.ShiiraBrowser.tabs.find(t => t.id === window.ShiiraBrowser.activeTabId)?.searchState?.status === 'done'`);
+    assert.equal(new URL(calls.at(-1).url).pathname, '/api/reddit');
+    // A Web 500 must not prevent a later, valid Reddit request.
+    sciraServerError = 'web';
+    await win.webContents.executeJavaScript(`window.ShiiraBrowser.searchScope.focus()`);
+    await press(win, 'Home', `window.ShiiraBrowser.tabs.find(t => t.id === window.ShiiraBrowser.activeTabId)?.searchFallback?.mode === 'web'`);
+    assert.equal(new URL(calls.at(-1).url).pathname, '/api/search');
+    await win.webContents.executeJavaScript(`(() => {
+      const b = window.ShiiraBrowser; b.createHomeTab(); b.selectSearchEngine('scira');
+      b.homeSearch.value = ''; b.searchScope.focus();
+    })()`);
+    await press(win, 'ArrowDown', `window.ShiiraBrowser.sciraSearchMode === 'reddit'`);
+    await win.webContents.executeJavaScript(`(() => { const b = window.ShiiraBrowser; b.homeSearch.value = 'Reddit still works after a Web failure'; b.homeSearch.focus(); })()`);
+    await press(win, 'Enter', `window.ShiiraBrowser.tabs.find(t => t.id === window.ShiiraBrowser.activeTabId)?.searchState?.status === 'done'`);
+    assert.equal(new URL(calls.at(-1).url).pathname, '/api/reddit');
+    sciraServerError = false;
+    sciraAuthError = true;
+    const rejected = await win.webContents.executeJavaScript(`(async () => {
+      const b = window.ShiiraBrowser; await b.performHomeSearch('rejected key fixture', 'scira');
+      const tab = b.tabs.find(t => t.id === b.activeTabId);
+      return { code: tab.searchFallback.code, url: tab.webview.src };
+    })()`);
+    assert.equal(rejected.code, 'authentication');
+    assert.equal(new URL(rejected.url).hostname, 'scira.ai');
+    assert.equal(new URL(rejected.url).searchParams.get('group'), 'reddit');
+    sciraAuthError = false;
     sciraServerError = true;
     const fallbackCalls = calls.length;
     const upstream = await win.webContents.executeJavaScript(`(async () => {
-      const b = window.ShiiraBrowser, id = b.activeTabId, count = b.tabs.length;
-      await b.performHomeSearch('web browser & tabs', 'scira');
+      const b = window.ShiiraBrowser; b.createHomeTab(); const id = b.activeTabId, count = b.tabs.length;
+      await b.performHomeSearch('web browser & tabs', 'scira', { retry: true });
       const tab = b.tabs.find(t => t.id === id);
-      return { sameTab: b.activeTabId === id && b.tabs.length === count, url: tab.url, src: tab.webview.src,
-        webviews: Array.from(document.querySelectorAll('webview')).filter(view => view.id === id).length, searchCleared: tab.searchState === null };
+      return { sameTab: b.activeTabId === id && b.tabs.length === count, url: tab.url, hasWebview: Boolean(tab.webview),
+        fallback: tab.searchFallback, message: document.getElementById('search-fallback-message').textContent };
     })()`);
     assert.equal(upstream.sameTab, true);
-    assert.equal(upstream.url, 'https://scira.ai/?q=web+browser+%26+tabs');
-    assert.equal(upstream.src, upstream.url);
-    assert.equal(upstream.webviews, 1);
-    assert.equal(upstream.searchCleared, true);
+    assert.equal(new URL(upstream.url).searchParams.get('q'), 'web browser & tabs');
+    assert.equal(new URL(upstream.url).searchParams.get('group'), 'reddit');
+    assert.equal(upstream.hasWebview, true);
+    assert.equal(upstream.fallback.mode, 'reddit');
+    assert.equal(upstream.fallback.query, 'web browser & tabs');
+    assert.match(upstream.message, /Opened Scira Reddit search/);
+    assert.equal(new URL(upstream.url).hostname, 'scira.ai');
+    assert.equal(upstream.message.includes('HTTP'), false);
     assert.equal(calls.length, fallbackCalls + 1);
+    win.setSize(560, 760);
+    await delay(100);
+    const noticeFits = await win.webContents.executeJavaScript(`(() => {
+      const rect = document.getElementById('search-fallback-notice').getBoundingClientRect();
+      const content = window.ShiiraBrowser.browserContent.getBoundingClientRect();
+      return rect.width > 0 && rect.left >= content.left && rect.right <= content.right;
+    })()`);
+    assert.equal(noticeFits, true);
+    await capture(win, 'scira-reddit-fallback-narrow', 560, 760);
+    const guardedCalls = calls.length;
+    const guarded = await win.webContents.executeJavaScript(`(async () => {
+      const b = window.ShiiraBrowser;
+      await b.performHomeSearch('another query during the failure pause', 'scira');
+      return b.tabs.find(t => t.id === b.activeTabId).searchFallback.retryBlocked;
+    })()`);
+    assert.equal(guarded, true);
+    assert.equal(calls.length, guardedCalls);
+    sciraServerError = false;
+    await clickOnce(win, `document.getElementById('search-fallback-retry')`);
+    assert.equal(calls.length, guardedCalls + 1);
+    assert.equal(new URL(calls.at(-1).url).pathname, '/api/reddit');
+    assert.deepEqual(calls.at(-1).body, { query: 'another query during the failure pause' });
+    win.setSize(1280, 800);
+    await delay(100);
     await win.webContents.executeJavaScript(`(() => {
       const b = window.ShiiraBrowser; b.createHomeTab(); b.homeSearch.value = 'web browser';
     })()`);
     const duckCalls = calls.length;
-    await clickOnce(win, `document.querySelector('.search-engine-chip[data-engine="duckduckgo"]')`);
+    await clickOnce(win, `document.querySelector('.search-engine-chip[data-engine="duckduckgo"]')`, `window.ShiiraBrowser.tabs.find(t => t.id === window.ShiiraBrowser.activeTabId)?.searchState?.provider === 'duckduckgo' && window.ShiiraBrowser.tabs.find(t => t.id === window.ShiiraBrowser.activeTabId)?.searchState?.status === 'done'`);
     const fallback = await win.webContents.executeJavaScript(`(() => {
       const b = window.ShiiraBrowser, state = b.tabs.find(t => t.id === b.activeTabId).searchState;
       return { provider: state.provider, status: state.status, selected: document.querySelector('.search-engine-chip.active').dataset.engine, answer: state.result.answer };
@@ -203,9 +369,10 @@ app.whenReady().then(async () => {
     await capture(win, 'duckduckgo-first-click');
     sciraServerError = false;
     const chipCalls = calls.length;
-    await clickOnce(win, `document.querySelector('.search-engine-chip[data-engine="scira"]')`);
-    assert.equal(calls.length, chipCalls + 1);
+    await clickOnce(win, `document.querySelector('.search-engine-chip[data-engine="scira"]')`, `window.ShiiraBrowser.tabs.find(t => t.id === window.ShiiraBrowser.activeTabId)?.searchState?.provider === 'scira' && window.ShiiraBrowser.tabs.find(t => t.id === window.ShiiraBrowser.activeTabId)?.searchState?.status === 'done'`);
     assert.equal(await win.webContents.executeJavaScript('window.ShiiraBrowser.currentSearchEngine'), 'scira');
+    assert.equal(calls.length, chipCalls + 1);
+    assert.equal(new URL(calls.at(-1).url).pathname, '/api/reddit');
     win.setSize(560, 760);
     await delay(100);
     const fits = await win.webContents.executeJavaScript(`(() => {
@@ -241,21 +408,26 @@ app.whenReady().then(async () => {
       const source = b.tabs.find(t => t.id === id);
       await b.saveSession();
       const saved = await window.shiiraAPI.session.load();
-      return { partition: source.webview.getAttribute('partition'), url: source.url, stillPrivate: source.privateMode,
+      return { hasWebview: Boolean(source.webview), partition: source.webview.getAttribute('partition'), query: source.searchFallback.query, url: source.url, stillPrivate: source.privateMode,
         saved: saved.tabs.some(t => t.url.includes('private+fallback+fixture')),
         sameActiveTab: b.activeTabId === other, activeUrl: b.urlInput.value, welcomeVisible: !b.welcomePage.classList.contains('hidden'),
-        backgroundInactive: !source.webview.classList.contains('active') };
+        backgroundInactive: !source.element.classList.contains('active') };
     })()`);
+    assert.equal(privateFallback.hasWebview, true);
     assert.ok(privateFallback.partition.startsWith('private:'));
-    assert.equal(privateFallback.url, 'https://scira.ai/?q=private+fallback+fixture');
+    assert.equal(privateFallback.query, 'private fallback fixture');
+    assert.equal(new URL(privateFallback.url).searchParams.get('q'), 'private fallback fixture');
+    assert.equal(new URL(privateFallback.url).searchParams.get('group'), 'reddit');
     assert.equal(privateFallback.stillPrivate, true);
     assert.equal(privateFallback.saved, false);
     assert.equal(privateFallback.sameActiveTab, true);
     assert.equal(privateFallback.activeUrl, '');
     assert.equal(privateFallback.welcomeVisible, true);
     assert.equal(privateFallback.backgroundInactive, true);
-    finish(null, { missingKeyWebsiteFallback: true, brave, brave401WebsiteFallback: true, scira, scira500WebsiteFallback: true,
+    finish(null, { missingKeyWebsiteFallback: true, brave, brave401WebsiteFallback: true, scira,
+      sciraWithoutKeyOpensScira: noKey, sciraRejectedKeyOpensScira: rejected, sciraServerErrorOpensScira: upstream, noKeyWebSearch: true, failedRequestsPaused: true,
+      nativeHomepageScopeSelection: true, enterAndArrowRetainReddit: true, addressBarRetainsReddit: true, scopeTabs, webFailureDoesNotBlockReddit: true,
       duckDuckGoWorksOnFirstClick: true, providerChipWorksOnFirstClick: true,
-      narrowLayoutFits: fits, restoredSearchDoesNotRequest: true, privateSearchNotSaved: true, privateFallback, calls: calls.length });
+      chromiumTransport: true, narrowLayoutFits: fits, restoredSearchDoesNotRequest: true, privateSearchNotSaved: true, privateFallback, calls: calls.length });
   } catch (error) { finish(error); }
 });

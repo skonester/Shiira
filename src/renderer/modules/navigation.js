@@ -3,6 +3,7 @@
 
 import { isInternalUrl, getDomain } from './utils.js';
 import { parseSearchUrl, searchUrl } from './search-model.js';
+import { getHomepage } from './homepage.js';
 
 export const NavigationMixin = {
   navigate(input) {
@@ -13,6 +14,8 @@ export const NavigationMixin = {
     if (this.activeTabId) {
       const tab = this.tabs.find(t => t.id === this.activeTabId);
       if (tab) {
+        tab.searchFallback = null;
+        this.renderSearchFallbackNotice?.(tab);
         if (tab.isHome) {
           this.createWebviewForHomeTab(tab, url);
         } else if (tab.webview) {
@@ -132,17 +135,33 @@ export const NavigationMixin = {
   },
 
   goHome() {
-    const customHome = localStorage.getItem('shiira-homepage-url');
-    if (customHome) {
-      this.navigate(customHome);
+    const homepage = getHomepage();
+    if (homepage !== 'shiira://home') {
+      this.navigate(homepage);
       return;
     }
-    if (!this.activeTabId) return;
+    if (!this.activeTabId) return this.createHomeTab();
     const tab = this.tabs.find(t => t.id === this.activeTabId);
+    this.resetTabToHome(tab);
+  },
+
+  resetTabToHome(tab) {
     if (tab) {
-      if (tab.webview) {
-        tab.webview.classList.remove('active');
-      }
+      this.cancelHomeSearch?.(tab);
+      clearInterval(tab.audioCheckInterval);
+      tab.audioCheckInterval = null;
+      tab.webview?.remove();
+      tab.webview = null;
+      tab.pendingUrl = null;
+      tab.searchState = null;
+      tab.searchFallback = null;
+      tab.url = 'shiira://home';
+      tab.title = tab.privateMode ? 'Private Tab' : 'Home';
+      tab.isPlayingAudio = false;
+      tab.isMuted = false;
+      this.updateTabAudioIcon?.(tab.id);
+      this.recordTabNavigation(tab, tab.url);
+      this.renderSearchFallbackNotice?.(tab);
       tab.isHome = true;
       tab.element.dataset.isHome = 'true';
       
@@ -153,7 +172,7 @@ export const NavigationMixin = {
         iconElement.src = 'shiira-asset://ui-icons/home.svg';
       }
       
-      tab.element.querySelector('.tab-title').textContent = 'Home';
+      tab.element.querySelector('.tab-title').textContent = tab.title;
       this.showWelcomePage();
     }
   },

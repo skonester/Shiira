@@ -1,6 +1,7 @@
-import { SEARCH_ENGINES, normalizeSearchEngine, searchUrl, safeResultUrl, websiteSearchUrl } from './search-model.js';
+import { SEARCH_ENGINES, SCIRA_SCOPES, normalizeSearchEngine, normalizeSearchMode, searchUrl, safeResultUrl, websiteSearchUrl } from './search-model.js';
 
 const WEBSITE_FALLBACK_ERRORS = new Set(['missing_key', 'authentication', 'rate_limit', 'provider_error', 'timeout', 'network', 'invalid_response', 'unavailable', 'busy']);
+const SCIRA_FALLBACK_ERRORS = new Set([...WEBSITE_FALLBACK_ERRORS, 'credential_unavailable']);
 
 export const HomeSearchMixin = {
   initHomeSearch() {
@@ -8,15 +9,38 @@ export const HomeSearchMixin = {
     this.searchContent = document.getElementById('ai-search-content');
     this.searchBadge = document.getElementById('home-search-provider');
     this.searchScope = document.getElementById('home-search-scope');
+    this.sciraSearchMode = normalizeSearchMode('scira', localStorage.getItem('shiira-scira-scope'));
+    if (this.searchScope) this.searchScope.value = this.sciraSearchMode;
+    document.getElementById('search-fallback-retry')?.addEventListener('click', () => void this.retrySearchFallback());
+    document.getElementById('search-fallback-settings')?.addEventListener('click', () => this.showSettings('search'));
+    document.getElementById('search-fallback-dismiss')?.addEventListener('click', () => {
+      const tab = this.tabs.find(tab => tab.id === this.activeTabId);
+      if (tab) tab.searchFallback = null;
+      this.renderSearchFallbackNotice(tab);
+    });
     document.getElementById('ai-search-close')?.addEventListener('click', () => this.hideHomeSearch());
     document.getElementById('home-search-submit')?.addEventListener('click', () => {
       if (this.homeSearch.value.trim()) void this.performHomeSearch(this.homeSearch.value.trim());
     });
     this.searchScope?.addEventListener('change', () => {
+      this.setSciraSearchMode(this.searchScope.value);
       const query = this.homeSearch.value.trim();
       if (query) void this.performHomeSearch(query, 'scira', { mode: this.searchScope.value });
     });
     this.initSearchCredentials();
+    void this.loadSearchCredentials();
+  },
+
+  getSearchMode(provider = this.currentSearchEngine) {
+    return normalizeSearchMode(provider, this.searchScope?.value || this.sciraSearchMode);
+  },
+
+  setSciraSearchMode(value) {
+    this.sciraSearchMode = normalizeSearchMode('scira', value);
+    localStorage.setItem('shiira-scira-scope', this.sciraSearchMode);
+    if (this.searchScope) this.searchScope.value = this.sciraSearchMode;
+    const tab = this.tabs.find(tab => tab.id === this.activeTabId);
+    if (tab?.isHome) tab.homeSearchMode = this.sciraSearchMode;
   },
 
   async selectHomeSearchProvider(provider) {
@@ -32,24 +56,29 @@ export const HomeSearchMixin = {
     const provider = normalizeSearchEngine(options.provider || this.currentSearchEngine);
     const id = this.createHomeTab({ ...options, background: true });
     const tab = this.tabs.find(tab => tab.id === id);
-    tab.searchState = { query, provider, mode: options.mode || 'web', status: options.deferLoad ? 'restored' : 'idle', page: 0 };
+    tab.searchState = { query, provider, mode: normalizeSearchMode(provider, options.mode ?? this.getSearchMode(provider)), status: options.deferLoad ? 'restored' : 'idle', page: 0 };
     tab.url = searchUrl(query, provider, tab.searchState.mode);
     this.updateTabTitle(id, `${SEARCH_ENGINES[provider].label}: ${query}`);
     if (!options.background && !options.deferLoad) this.switchTab(id);
     return id;
   },
 
-  async performHomeSearch(query, provider = this.currentSearchEngine, { page = 0, mode = this.searchScope?.value || 'web' } = {}) {
-    let tab = this.tabs.find(tab => tab.id === this.activeTabId);
-    if (!tab?.isHome) return this.createSearchTab(query, { provider, mode, privateMode: tab?.privateMode === true });
+  async performHomeSearch(query, provider = this.currentSearchEngine, { page = 0, mode, retry = false } = {}) {
     provider = normalizeSearchEngine(provider);
-    if (provider !== 'scira') mode = 'web';
+    mode = normalizeSearchMode(provider, mode ?? this.getSearchMode(provider));
+    let tab = this.tabs.find(tab => tab.id === this.activeTabId);
+    if (!tab?.isHome) {
+      const id = this.createSearchTab(query, { provider, mode, privateMode: tab?.privateMode === true, deferLoad: true });
+      this.switchTab(id);
+      return this.performHomeSearch(query, provider, { page, mode, retry });
+    }
     const sameRequest = tab.searchState;
     if (sameRequest?.status === 'loading' && sameRequest.query === query.trim() && sameRequest.provider === provider && sameRequest.mode === mode && sameRequest.page === page) return;
     // Provider chips, fallback buttons, restored tabs and the query input share
     // one source of truth. A fallback must not leave Scira selected in the UI.
     this.selectSearchEngine?.(provider);
-    if (this.searchScope) this.searchScope.value = mode;
+    if (this.searchScope && provider === 'scira') this.searchScope.value = mode;
+    if (provider === 'scira') tab.homeSearchMode = mode;
     const old = tab.searchState;
     if (old?.requestId) void window.shiiraAPI.search.cancel(old.requestId);
     this.homeSearchSequence = (this.homeSearchSequence || 0) + 1;
@@ -62,11 +91,12 @@ export const HomeSearchMixin = {
     this.urlInput.value = tab.url;
     this.renderHomeSearch(tab);
     let response;
-    try { response = await window.shiiraAPI.search.query({ id: requestId, query: state.query, provider, mode, page }); }
+    try { response = await window.shiiraAPI.search.query({ id: requestId, query: state.query, provider, mode, page, retry }); }
     catch { response = { success: false, code: 'unavailable', error: 'Search is unavailable. Try again.' }; }
     // A newer search or a closed tab must never be overwritten by an old reply.
     if (tab.searchState !== state || !this.tabs.includes(tab)) return;
     if (response.success) {
+      if (this.searchCredentialErrors) delete this.searchCredentialErrors[provider];
       let result = response.result;
       if (page > 0 && state.result) {
         const seen = new Set();
@@ -75,18 +105,30 @@ export const HomeSearchMixin = {
       state.status = 'done';
       state.result = result;
     } else {
-      state.status = response.code === 'canceled' ? 'canceled' : 'error';
+      state.status = response.code === 'canceled' ? 'canceled' : response.code === 'missing_key' ? 'setup' : 'error';
       state.error = response.error;
       state.code = response.code;
       state.httpStatus = response.status;
       state.providerRequestId = response.requestId;
+      state.retryBlocked = response.retryBlocked === true;
     }
     state.requestId = null;
-    const fallbackUrl = !response.success && WEBSITE_FALLBACK_ERRORS.has(response.code) ? websiteSearchUrl(state.query, provider) : null;
+    // API credentials enhance search; they must never gate access to the selected
+    // provider's website or silently switch the user to a different provider.
+    const fallbackUrl = !response.success && provider === 'brave' && WEBSITE_FALLBACK_ERRORS.has(response.code) ? websiteSearchUrl(state.query, provider)
+      : !response.success && provider === 'scira' && SCIRA_FALLBACK_ERRORS.has(response.code) ? websiteSearchUrl(state.query, provider, mode) : null;
+    if (!response.success && response.code !== 'canceled' && response.code !== 'missing_key') {
+      this.searchCredentialErrors ||= {};
+      this.searchCredentialErrors[provider] = response.error;
+    }
     if (fallbackUrl) {
       // Convert the request's own tab, even if the user switched tabs while it
       // was running. Clearing searchState prevents stale replies or retry loops.
       this.createWebviewForHomeTab(tab, fallbackUrl);
+      if (response.code !== 'missing_key') {
+        tab.searchFallback = { provider, mode, query: state.query, error: response.error, code: response.code, retryBlocked: response.retryBlocked === true };
+      }
+      if (this.activeTabId === tab.id) this.renderSearchFallbackNotice?.(tab);
     } else if (this.activeTabId === tab.id) this.renderHomeSearch(tab);
     void this.saveSession?.();
   },
@@ -97,7 +139,9 @@ export const HomeSearchMixin = {
     if (tab?.searchState) {
       this.urlInput.value = tab.url;
       this.selectSearchEngine?.(tab.searchState.provider);
-      if (this.searchScope) this.searchScope.value = tab.searchState.mode || 'web';
+      if (this.searchScope && tab.searchState.provider === 'scira') this.searchScope.value = normalizeSearchMode('scira', tab.searchState.mode);
+    } else if (this.searchScope) {
+      this.searchScope.value = normalizeSearchMode('scira', tab?.homeSearchMode || this.sciraSearchMode);
     }
     this.renderHomeSearch(tab);
     if (tab?.searchState?.status === 'idle') void this.performHomeSearch(tab.searchState.query, tab.searchState.provider, { mode: tab.searchState.mode });
@@ -158,8 +202,9 @@ export const HomeSearchMixin = {
       if (result.more && state.status === 'done') action('More results', () => void this.performHomeSearch(state.query, state.provider, { page: state.page + 1, mode: state.mode }));
     }
     if (state.status !== 'done') {
-      if (state.code === 'missing_key' || state.code === 'authentication') action('Open Search settings', () => this.showSettings('search'));
-      else action('Search again', () => void this.performHomeSearch(state.query, state.provider, { page: state.page, mode: state.mode }));
+      if (['missing_key', 'authentication', 'credential_unavailable'].includes(state.code)) action('Open Search settings', () => this.showSettings('search'));
+      if (state.code !== 'missing_key') action(state.provider === 'scira' ? 'Retry Scira' : 'Search again', () => void this.performHomeSearch(state.query, state.provider, { page: state.page, mode: state.mode, retry: true }));
+      if (state.provider === 'scira') action('Search on Scira', () => this.createWebviewForHomeTab(tab, websiteSearchUrl(state.query, 'scira', state.mode)));
       if (state.provider !== 'duckduckgo') action('Try DuckDuckGo Quick', () => void this.performHomeSearch(state.query, 'duckduckgo', { mode: 'web' }));
     }
   },
@@ -184,29 +229,77 @@ export const HomeSearchMixin = {
     for (const provider of ['brave', 'scira']) {
       document.getElementById(`search-${provider}-save`)?.addEventListener('click', () => void this.saveSearchCredential(provider));
       document.getElementById(`search-${provider}-remove`)?.addEventListener('click', () => void this.saveSearchCredential(provider, true));
+      document.getElementById(`search-${provider}-key`)?.addEventListener('keydown', event => {
+        if (event.key === 'Enter') { event.preventDefault(); void this.saveSearchCredential(provider); }
+      });
     }
   },
 
   async loadSearchCredentials() {
+    const revision = this.searchCredentialRevision;
     try {
       const status = await window.shiiraAPI.search.status();
+      if (revision === this.searchCredentialRevision) this.renderSearchCredentials(status);
+    } catch {
+      if (revision !== this.searchCredentialRevision) return;
       for (const provider of ['brave', 'scira']) {
         const el = document.getElementById(`search-${provider}-status`);
-        if (el) el.textContent = status[provider]?.configured ? `API key configured${status[provider].source === 'environment' ? ' through environment' : ' in the system keychain'}.` : 'No API key configured.';
+        if (el) el.textContent = 'Could not load API key status. Try opening Search settings again.';
       }
-    } catch { /* Settings remain usable when the keychain is temporarily unavailable. */ }
+    }
+  },
+
+  renderSearchCredentials(status, savedProvider = null) {
+    this.searchCredentialStatus = status;
+    for (const provider of ['brave', 'scira']) {
+      const input = document.getElementById(`search-${provider}-key`);
+      if (input?.disabled && provider !== savedProvider) continue;
+      const configured = status[provider]?.configured;
+      const el = document.getElementById(`search-${provider}-status`);
+      const error = this.searchCredentialErrors?.[provider];
+      if (el) el.textContent = (status[provider]?.error || (configured ? `API key configured${status[provider].source === 'environment' ? ' through environment' : ' in the system keychain'}.` : 'No API key configured.')) + (error ? ` Last API request: ${error}` : '');
+      if (input) input.placeholder = configured ? 'API key configured. Paste a replacement to change it.' : 'Paste a key to save it';
+    }
+  },
+
+  renderSearchFallbackNotice(tab) {
+    const notice = document.getElementById('search-fallback-notice');
+    if (!notice) return;
+    notice.classList.toggle('hidden', !tab?.searchFallback);
+    if (tab?.searchFallback) {
+      const { provider, mode, error } = tab.searchFallback;
+      document.getElementById('search-fallback-message').textContent = provider === 'scira'
+        ? `Opened Scira ${SCIRA_SCOPES[normalizeSearchMode('scira', mode)].label} search. The API request did not complete.`
+        : `${error} Opened ${SEARCH_ENGINES[provider].label} on the web instead.`;
+    }
+    document.getElementById('search-fallback-retry')?.classList.toggle('hidden', tab?.searchFallback?.provider !== 'scira');
+  },
+
+  async retrySearchFallback(tab = this.tabs.find(tab => tab.id === this.activeTabId)) {
+    const fallback = tab?.searchFallback;
+    if (!fallback || this.activeTabId !== tab.id) return;
+    this.resetTabToHome(tab);
+    await this.performHomeSearch(fallback.query, fallback.provider, { mode: fallback.mode, retry: true });
   },
 
   async saveSearchCredential(provider, remove = false) {
     const input = document.getElementById(`search-${provider}-key`);
     const status = document.getElementById(`search-${provider}-status`);
-    if (!remove && !input.value.trim()) { status.textContent = 'Enter an API key to save.'; return; }
+    if (input.disabled) return false;
+    if (!remove && !input.value.trim()) { status.textContent = 'Enter an API key to save.'; return false; }
     const key = remove ? '' : input.value;
-    input.value = '';
+    this.searchCredentialRevision = (this.searchCredentialRevision || 0) + 1;
+    const controls = [input, document.getElementById(`search-${provider}-save`), document.getElementById(`search-${provider}-remove`)];
+    controls.forEach(control => { if (control) control.disabled = true; });
+    status.textContent = remove ? 'Removing saved key…' : 'Saving key…';
     try {
       const response = await window.shiiraAPI.search.setKey(provider, key);
-      if (!response.success) { status.textContent = response.error; return; }
-      await this.loadSearchCredentials();
-    } catch { status.textContent = 'The API key could not be saved.'; }
+      if (!response.success) { status.textContent = response.error; return false; }
+      input.value = '';
+      if (this.searchCredentialErrors) delete this.searchCredentialErrors[provider];
+      this.renderSearchCredentials(response.status, provider);
+      return true;
+    } catch { status.textContent = 'The API key could not be saved. Try again.'; return false; }
+    finally { controls.forEach(control => { if (control) control.disabled = false; }); }
   }
 };

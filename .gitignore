@@ -5,6 +5,7 @@ node_modules/
 # Build outputs
 dist/
 out/
+/src/preload/webview.bundle.js
 
 # Logs
 *.log

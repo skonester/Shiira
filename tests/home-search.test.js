@@ -32,7 +32,7 @@ test('website fallback URLs keep the query on the selected provider and encode U
     assert.equal(url.searchParams.get('q'), query);
     assert.equal(url.hash, '');
     assert.equal(url.username, '');
-    assert.equal(url.searchParams.size, provider === 'brave' ? 2 : 1);
+    assert.equal(url.searchParams.size, 2);
   }
   for (const provider of ['duckduckgo', 'startpage', '__proto__']) assert.equal(websiteSearchUrl(query, provider), null);
   assert.equal(websiteSearchUrl(' ', 'scira'), null);
@@ -42,15 +42,15 @@ function browserState(mixin) {
   return { ...mixin, tabs: [{ id: 'home', isHome: true, url: 'shiira://home' }], activeTabId: 'home',
     currentSearchEngine: 'brave', searchScope: { value: 'web' }, homeSearch: { value: '' }, urlInput: { value: '' },
     navigations: [], createWebviewForHomeTab(tab, url) { this.navigations.push({ tab, url }); tab.searchState = null; tab.isHome = false; tab.url = url; },
-    renderHomeSearch() {}, updateTabTitle() {}, selectSearchEngine(provider) { this.currentSearchEngine = provider; }, saveSession: async () => true };
+    renderHomeSearch() {}, renderSearchFallbackNotice() {}, updateTabTitle() {}, selectSearchEngine(provider) { this.currentSearchEngine = provider; }, saveSession: async () => true };
 }
 const result = query => ({ success: true, result: { provider: 'brave', query, answer: '', results: [], more: false } });
 
-test('Brave and Scira API failures automatically search their own websites once in the original private tab', async () => {
+test('Brave API failures use its website once in the original private tab', async () => {
   const { HomeSearchMixin } = await load('home-search');
   const previous = global.window;
   try {
-    for (const provider of ['brave', 'scira']) {
+    for (const provider of ['brave']) {
       for (const code of ['missing_key', 'authentication', 'rate_limit', 'provider_error', 'timeout', 'network', 'invalid_response', 'unavailable', 'busy']) {
         let calls = 0;
         global.window = { shiiraAPI: { search: { query: async () => { calls++; return { success: false, code }; }, cancel: async () => {} } } };
@@ -71,6 +71,79 @@ test('Brave and Scira API failures automatically search their own websites once 
   } finally { global.window = previous; }
 });
 
+test('Scira without a key, rejected keys and unreadable credentials open Scira itself with the selected scope', async () => {
+  const { HomeSearchMixin } = await load('home-search');
+  const previous = global.window;
+  try {
+    for (const code of ['missing_key', 'credential_unavailable', 'authentication']) {
+      global.window = { shiiraAPI: { search: { query: async () => ({ success: false, code, error: 'Fixture failure', status: 500 }), cancel: async () => {} } } };
+      const browser = browserState(HomeSearchMixin);
+      browser.tabs[0].privateMode = true;
+      await browser.performHomeSearch('my original query', 'scira', { mode: 'reddit' });
+      const tab = browser.tabs[0];
+      assert.equal(browser.navigations.length, 1);
+      assert.equal(tab.isHome, false);
+      assert.equal(tab.privateMode, true);
+      const url = new URL(tab.url);
+      assert.equal(url.hostname, 'scira.ai');
+      assert.equal(url.searchParams.get('q'), 'my original query');
+      assert.equal(url.searchParams.get('group'), 'reddit');
+    }
+  } finally { global.window = previous; }
+});
+
+test('Scira service failures stay on Scira instead of substituting another provider', async () => {
+  const { HomeSearchMixin } = await load('home-search');
+  const { websiteSearchUrl } = await load('search-model');
+  const previous = global.window;
+  try {
+    for (const mode of ['web', 'reddit', 'x', 'people']) {
+      for (const code of ['rate_limit', 'provider_error', 'timeout', 'network', 'invalid_response', 'unavailable', 'busy']) {
+        global.window = { shiiraAPI: { search: { query: async () => ({ success: false, code, error: 'Fixture failure' }), cancel: async () => {} } } };
+        const browser = browserState(HomeSearchMixin);
+        const tab = browser.tabs[0]; tab.privateMode = true;
+        await browser.performHomeSearch('my original query', 'scira', { mode });
+        assert.equal(browser.navigations.length, 1);
+        assert.equal(tab.url, websiteSearchUrl('my original query', 'scira', mode));
+        assert.equal(new URL(tab.url).hostname, 'scira.ai');
+        assert.equal(tab.privateMode, true);
+        assert.equal(tab.searchFallback.query, 'my original query');
+        assert.equal(tab.searchFallback.mode, mode);
+        assert.equal(browser.currentSearchEngine, 'scira');
+      }
+    }
+  } finally { global.window = previous; }
+});
+
+test('scope is retained in address-bar searches, Scira shortcuts, website URLs and fallback queries', async () => {
+  const { HomeSearchMixin } = await load('home-search');
+  const { ShiiraHomageMixin } = await load('shiira-homage');
+  const { NavigationMixin } = await load('navigation');
+  const { matchSiteSearch, siteSearchUrl } = await load('site-search');
+  const { parseSearchUrl, websiteSearchUrl } = await load('search-model');
+  const browser = { ...HomeSearchMixin, ...ShiiraHomageMixin, ...NavigationMixin, currentSearchEngine: 'scira', searchScope: { value: 'reddit' } };
+  assert.equal(parseSearchUrl(browser.processUrl('cool github projects')).mode, 'reddit');
+  assert.equal(parseSearchUrl(siteSearchUrl(matchSiteSearch('scira'), 'cool github projects', browser.getSearchMode())).mode, 'reddit');
+  for (const mode of ['web', 'reddit', 'x', 'people']) {
+    assert.equal(new URL(websiteSearchUrl('original query', 'scira', mode)).searchParams.get('group'), mode);
+  }
+});
+
+test('switching to another provider does not reset the saved Scira scope to Web', async () => {
+  const { HomeSearchMixin } = await load('home-search');
+  const previous = global.window;
+  const requests = [];
+  global.window = { shiiraAPI: { search: { query: async input => { requests.push(input); return result(input.query); }, cancel: async () => {} } } };
+  try {
+    const browser = browserState(HomeSearchMixin);
+    browser.searchScope.value = 'reddit';
+    await browser.performHomeSearch('test query', 'duckduckgo');
+    assert.equal(browser.searchScope.value, 'reddit');
+    await browser.performHomeSearch('test query', 'scira');
+    assert.equal(requests[1].mode, 'reddit');
+  } finally { global.window = previous; }
+});
+
 test('cancellation, invalid input, successful searches and DuckDuckGo errors never open a provider website', async () => {
   const { HomeSearchMixin } = await load('home-search');
   const previous = global.window;
@@ -86,14 +159,15 @@ test('cancellation, invalid input, successful searches and DuckDuckGo errors nev
   } finally { global.window = previous; }
 });
 
-test('a bridge failure uses website fallback, but a failure after switching tabs stays with its source', async () => {
+test('Scira bridge failures use regular search and a background fallback stays with its source', async () => {
   const { HomeSearchMixin } = await load('home-search');
   const previous = global.window;
   try {
     global.window = { shiiraAPI: { search: { query: async () => { throw new Error('Bridge unavailable'); } } } };
     const bridge = browserState(HomeSearchMixin);
     await bridge.performHomeSearch('web browser', 'scira');
-    assert.equal(new URL(bridge.tabs[0].url).hostname, 'scira.ai');
+    assert.equal(bridge.tabs[0].searchFallback.code, 'unavailable');
+    assert.equal(bridge.navigations.length, 1);
 
     let finish;
     global.window = { shiiraAPI: { search: { query: () => new Promise(resolve => { finish = resolve; }) } } };

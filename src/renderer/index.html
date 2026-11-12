@@ -205,6 +205,12 @@
 
     <!-- Browser Content Area -->
     <div id="browser-content">
+      <div id="search-fallback-notice" class="search-fallback-notice hidden" role="status">
+        <span id="search-fallback-message"></span>
+        <button id="search-fallback-retry" type="button" class="settings-action hidden">Retry Scira AI</button>
+        <button id="search-fallback-settings" type="button" class="settings-action">Search settings</button>
+        <button id="search-fallback-dismiss" type="button" class="settings-action" aria-label="Dismiss search notice">Dismiss</button>
+      </div>
       <!-- Webviews will be dynamically added here -->
       <div id="welcome-page" class="welcome">
         <canvas id="particle-canvas"></canvas>
@@ -1066,8 +1072,8 @@
             <section class="settings-page" data-settings-page="general">
               <h4>General</h4>
               <div class="settings-group">
-                <h5>Home button</h5>
-                <p>Use Shiira's home page, or send the Home button to a website.</p>
+                <h5>Home page</h5>
+                <p>Choose the page for the Home button, new tabs and startup when no previous tab is restored. Private tabs open Shiira's private home page.</p>
                 <label for="settings-homepage">Custom home page</label>
                 <div class="settings-inline"><input id="settings-homepage" type="url" placeholder="https://example.com"><button id="settings-save-homepage" type="button" class="settings-action">Save</button></div>
                 <button id="settings-reset-homepage" type="button" class="settings-action">Use Shiira home page</button>
@@ -1112,7 +1118,7 @@
               <div class="settings-group">
                 <h5>On startup</h5>
                 <label class="settings-check"><input id="settings-restore-session" type="checkbox"> Continue where you left off</label>
-                <p>Restore open tabs from the previous session. Turn this off to start on Shiira's home page. Pinned tabs, favorites and spaces always stay.</p>
+                <p>Restore open tabs from the previous session. Turn this off to start on your home page. Pinned tabs, favorites and spaces always stay.</p>
               </div>
               <div class="settings-group">
                 <h5>Today tabs</h5>
@@ -1151,7 +1157,7 @@
               </div>
               <div class="settings-group">
                 <h5>Browsing</h5>
-                <p>New tabs open on Shiira's home page. Use the History panel to revisit pages and Tab Expose to see all open tabs.</p>
+                <p>New tabs use the home page chosen in General. Use the History panel to revisit pages and Tab Expose to see all open tabs.</p>
                 <div class="settings-inline"><button id="settings-open-history" type="button" class="settings-action">Open history</button><button id="settings-open-tab-expose" type="button" class="settings-action">Tab Expose</button></div>
               </div>
             </section>

@@ -5,6 +5,7 @@
 
 const path = require('path');
 const { CosmeticEngine } = require('./cosmetic-engine');
+const { isYouTubeUrl } = require('../../shared/youtube');
 
 class CosmeticInjector {
   constructor() {
@@ -44,7 +45,7 @@ class CosmeticInjector {
    * @returns {Object} { css: string, selectorCount: number }
    */
   getCSSForUrl(url) {
-    if (!this.enabled) {
+    if (!this.enabled || isYouTubeUrl(url)) {
       return { css: '', selectorCount: 0 };
     }
 

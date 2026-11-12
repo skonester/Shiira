@@ -5,6 +5,12 @@ try {
 }
 
 const { app, BrowserWindow, ipcMain, session, protocol, nativeImage, Menu, dialog, clipboard, shell, net } = require('electron');
+const { installYouTubePlayback } = require('./youtube-playback');
+
+// Packaged builds include this sandboxed bundle; source launches rebuild it so
+// Electron's restricted preload never needs Node or arbitrary module loading.
+if (!app.isPackaged) require('../../build/preloads').buildPreloads();
+installYouTubePlayback({ app, BrowserWindow, ipcMain, session });
 
 // Try to import components for Castlabs Electron (Widevine DRM support)
 let components = null;
@@ -36,7 +42,12 @@ const SpacesService = require('./spaces-service');
 const ExtensionsService = require('./extensions-service');
 const arcImporter = require('./arc-importer');
 const { SearchService } = require('./search-service');
-const searchService = new SearchService({ keychain: require('keytar') });
+const searchService = new SearchService({
+  keychain: require('keytar'),
+  // Use Chromium's proxy/certificate/network behavior, outside webpage sessions
+  // and their filtering hooks. API authentication never depends on website cookies.
+  fetchImpl: (url, options) => session.fromPartition('search-api').fetch(url, { ...options, credentials: 'omit' })
+});
 const { getAdBlocker, getCosmeticInjector, getScriptInjector } = require('./ad-blocker');
 
 // Initialize Chrome Importer
@@ -577,6 +588,14 @@ function createWindow() {
       preload: path.join(__dirname, '../preload/preload.js'),
       webviewTag: true // Enable webview for browser tabs
     }
+  });
+
+  mainWindow.webContents.on('will-attach-webview', (_event, webPreferences) => {
+    // Site-specific behavior runs before page scripts in an isolated sandbox.
+    webPreferences.preload = path.join(__dirname, '../preload/webview.bundle.js');
+    webPreferences.nodeIntegration = false;
+    webPreferences.contextIsolation = true;
+    webPreferences.sandbox = true;
   });
   
   // Explicitly set the icon for Windows taskbar

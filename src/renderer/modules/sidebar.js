@@ -395,7 +395,7 @@ export const SidebarMixin = {
       const fallback = visible.find(t => t.section === 'today') || visible.find(t => t.section === 'pinned');
       if (remembered) this.switchTab(remembered.id);
       else if (fallback) this.switchTab(fallback.id);
-      else this.createHomeTab();
+      else this.createTab();
     }
     this.saveSpacesSoon();
   },
@@ -549,7 +549,7 @@ export const SidebarMixin = {
     if (active && active.section !== 'favorites' && active.spaceId !== this.focusedSpaceId) {
       const next = this.getVisibleTabOrder().find(t => t.id !== active.id);
       if (next) this.switchTab(next.id);
-      else this.createHomeTab();
+      else this.createTab();
     }
     this.placeTabElements();
     this.saveSpacesSoon();
@@ -977,7 +977,7 @@ export const SidebarMixin = {
     if (tabId === this.activeTabId) {
       const next = this.pickNextTab(tab);
       if (next) this.switchTab(next.id);
-      else this.createHomeTab();
+      else this.createTab();
     }
     this.sleepTab(tab, { force: true, resetToPinned: true });
     this.saveSpacesSoon();
@@ -1302,7 +1302,7 @@ export const SidebarMixin = {
     } else {
       const home = visible.find(t => t.isHome);
       if (home) this.switchTab(home.id);
-      else this.createHomeTab();
+      else this.createTab();
     }
   },
 

@@ -171,7 +171,7 @@ export const CommandBarMixin = {
 
     if (this.commandSiteSearch) {
       const site = this.commandSiteSearch;
-      const url = siteSearchUrl(site, raw);
+      const url = siteSearchUrl(site, raw, this.getSearchMode?.('scira') || 'web');
       return [{ type: 'search', label: raw || `Search ${site.name}`, subtitle: raw ? `Search ${site.name}` : 'Type your search · Backspace or Escape to leave site search', url,
         run: (opts) => { if (raw) this.openFromCommandBar(url, opts); } }];
     }

@@ -133,6 +133,76 @@ test('API keys save/remove through the keychain and status never returns secrets
   assert.equal(JSON.stringify(failed).includes('secret value'), false);
 });
 
+test('unreadable saved credentials are distinguished from missing keys and never send a provider request', async () => {
+  let requests = 0;
+  const keychain = { getPassword: async () => { throw new Error('Native error containing a secret'); } };
+  const service = new SearchService({ env: {}, keychain, fetchImpl: async () => { requests++; } });
+  const status = await service.status();
+  assert.equal(status.scira.configured, false);
+  assert.match(status.scira.error, /could not read/);
+  assert.equal(JSON.stringify(status).includes('Native error'), false);
+  const response = await service.search(1, request('scira'));
+  assert.equal(response.code, 'credential_unavailable');
+  assert.equal(requests, 0);
+  const managed = new SearchService({ env, keychain });
+  assert.equal((await managed.status()).scira.source, 'environment');
+});
+
+test('Scira failures pause further paid requests until explicit retry, cooldown expiry or a new key', async t => {
+  let requests = 0;
+  let failing = true;
+  const service = new SearchService({ env, keychain: keychain(), fetchImpl: async () => {
+    requests++;
+    return failing ? json({}, 500) : json({ text: 'Recovered answer', sources: [] });
+  } });
+  assert.equal((await service.search(1, request('scira'))).status, 500);
+  assert.equal((await service.search(2, request('scira', { query: 'a different query' }))).retryBlocked, true);
+  assert.equal(requests, 1);
+  failing = false;
+  assert.equal((await service.search(1, request('scira', { retry: true }))).success, true);
+  assert.equal(requests, 2);
+  assert.equal((await service.search(1, request('scira'))).success, true);
+  failing = true;
+  await service.search(1, request('scira'));
+  assert.equal(requests, 4);
+  const later = Date.now() + 61000;
+  t.mock.method(Date, 'now', () => later);
+  await service.search(1, request('scira'));
+  assert.equal(requests, 5);
+  await service.setKey('scira', 'replacement-fixture-key');
+  failing = false;
+  assert.equal((await service.search(1, request('scira'))).success, true);
+  assert.equal(requests, 6);
+});
+
+test('a keychain write that cannot be read back never reports a successful save or removal', async () => {
+  for (const saved of [null, 'older-key']) {
+    const service = new SearchService({ env: {}, keychain: {
+      setPassword: async () => {}, deletePassword: async () => {}, getPassword: async () => saved
+    } });
+    assert.equal((await service.setKey('brave', 'replacement-key')).success, false);
+    if (saved) assert.equal((await service.setKey('brave', '')).success, false);
+  }
+});
+
+test('a Web server failure does not suppress a Reddit request, while key rejection pauses every scope', async () => {
+  const paths = [];
+  const service = new SearchService({ env, fetchImpl: async url => {
+    const pathname = new URL(url).pathname;
+    paths.push(pathname);
+    return pathname === '/api/search' ? json({}, 500) : json({ text: 'Reddit answer', sources: [] });
+  } });
+  await service.search(1, request('scira'));
+  assert.equal((await service.search(1, request('scira', { mode: 'reddit' }))).success, true);
+  assert.equal((await service.search(1, request('scira'))).retryBlocked, true);
+  assert.deepEqual(paths, ['/api/search', '/api/reddit']);
+  let rejectedCalls = 0;
+  const rejected = new SearchService({ env, fetchImpl: async () => { rejectedCalls++; return json({}, 401); } });
+  await rejected.search(1, request('scira'));
+  assert.equal((await rejected.search(1, request('scira', { mode: 'reddit' }))).retryBlocked, true);
+  assert.equal(rejectedCalls, 1);
+});
+
 test('authentication, rate limits, invalid responses and oversized bodies are readable errors', async () => {
   for (const [status, code] of [[401, 'authentication'], [403, 'authentication'], [429, 'rate_limit'], [500, 'provider_error']]) {
     const service = new SearchService({ env, fetchImpl: async () => json({ error: env.BRAVE_SEARCH_API_KEY }, status) });

@@ -76,21 +76,25 @@ class SearchService {
     this.timeoutMs = timeoutMs;
     this.active = new Map();
     this.suggestionCache = new Map();
+    this.sciraFailures = new Map();
   }
 
   async credential(provider) {
     let saved;
-    try { saved = await this.keychain?.getPassword(KEYCHAIN_SERVICE, provider); } catch {}
+    let unreadable = false;
+    try { saved = await this.keychain?.getPassword(KEYCHAIN_SERVICE, provider); } catch { unreadable = true; }
     if (saved) return { key: saved, source: 'keychain' };
     const key = this.env[ENV_KEYS[provider]];
-    return { key: typeof key === 'string' ? key.trim() : '', source: key ? 'environment' : null };
+    const trimmed = typeof key === 'string' ? key.trim() : '';
+    if (trimmed) return { key: trimmed, source: 'environment' };
+    return { key: '', source: null, ...(unreadable ? { error: 'Shiira could not read the saved API key from the system keychain. Try again or open Search settings.' } : {}) };
   }
 
   async status() {
     const status = {};
     for (const provider of ['brave', 'scira']) {
-      const { key, source } = await this.credential(provider);
-      status[provider] = { configured: Boolean(key), source };
+      const { key, source, error } = await this.credential(provider);
+      status[provider] = { configured: Boolean(key), source, ...(error ? { error } : {}) };
     }
     return status;
   }
@@ -102,7 +106,12 @@ class SearchService {
       const key = value.trim();
       if (key) await this.keychain.setPassword(KEYCHAIN_SERVICE, provider, key);
       else await this.keychain.deletePassword(KEYCHAIN_SERVICE, provider);
+      const saved = await this.keychain.getPassword(KEYCHAIN_SERVICE, provider);
+      if (key ? saved !== key : Boolean(saved)) {
+        return { success: false, error: 'The system keychain did not apply the change. Try again.' };
+      }
       this.suggestionCache.clear();
+      if (provider === 'scira') this.sciraFailures.clear();
       return { success: true, status: await this.status() };
     } catch { return { success: false, error: 'The API key could not be saved in the system keychain.' }; }
   }
@@ -175,15 +184,26 @@ class SearchService {
     const controller = new AbortController();
     this.active.set(token, controller);
     let expired = false;
+    let usedKey = '';
     const timer = setTimeout(() => { expired = true; controller.abort(); }, this.timeoutMs);
     try {
       const { provider, query, mode, page } = request;
       let key = '';
       if (provider !== 'duckduckgo') {
-        key = (await this.credential(provider)).key;
+        const credential = await this.credential(provider);
+        if (credential.error) throw new SearchError('credential_unavailable', credential.error);
+        key = credential.key;
         if (!key) throw new SearchError('missing_key', `Add a ${provider === 'brave' ? 'Brave Search' : 'Scira'} API key in Settings → Search, or use DuckDuckGo Quick.`);
       }
       if (controller.signal.aborted) throw new SearchError('canceled', 'Search canceled.');
+      if (provider === 'scira') {
+        usedKey = key;
+        const failure = [this.sciraFailures.get('*'), this.sciraFailures.get(mode)]
+          .find(failure => failure?.key === key && failure.until > Date.now());
+        if (failure && input.retry !== true) {
+          return { ...failure.response, retryBlocked: true };
+        }
+      }
       let url;
       let options = { headers: { Accept: 'application/json' } };
       if (provider === 'brave') {
@@ -200,12 +220,20 @@ class SearchService {
         url.search = new URLSearchParams({ q: query, format: 'json', no_html: '1', skip_disambig: '1' }).toString();
       }
       const data = await this.json(String(url), options, controller.signal);
-      return { success: true, result: normalizeResponse(provider, data, query, mode, page) };
+      const result = normalizeResponse(provider, data, query, mode, page);
+      if (provider === 'scira') { this.sciraFailures.delete('*'); this.sciraFailures.delete(mode); }
+      return { success: true, result };
     } catch (error) {
       if (controller.signal.aborted) return { success: false, code: expired ? 'timeout' : 'canceled', error: expired ? 'Search took too long. Try again.' : 'Search canceled.' };
-      return { success: false, code: error instanceof SearchError ? error.code : 'network',
+      const response = { success: false, code: error instanceof SearchError ? error.code : 'network',
         status: error instanceof SearchError ? error.status : undefined, requestId: error instanceof SearchError ? error.requestId : undefined,
         error: error instanceof SearchError ? error.message : 'The search provider could not be reached. Check your connection and try again.' };
+      if (request.provider === 'scira' && usedKey && (response.status >= 500 || ['authentication', 'rate_limit', 'invalid_response'].includes(response.code))) {
+        const scope = ['authentication', 'rate_limit'].includes(response.code) ? '*' : request.mode;
+        if (scope !== '*') this.sciraFailures.delete('*');
+        this.sciraFailures.set(scope, { key: usedKey, until: Date.now() + 60000, response });
+      }
+      return response;
     } finally {
       clearTimeout(timer);
       if (this.active.get(token) === controller) this.active.delete(token);

@@ -106,6 +106,14 @@ THIS SOFTWARE IS PROVIDED BY SHIIRA PROJECT "AS IS" AND ANY EXPRESS OR IMPLIED W
 
 ## Dependency & Third-Party Library Credits
 
+YouTube playback adapts [Litube v4](https://github.com/HydeYYHH/litube) and
+[MediaServiceCore](https://github.com/HydeYYHH/MediaServiceCore)'s VisionOS-first
+stream selection, shared extraction and bounded recovery to Electron. The
+JavaScript stream resolver uses [YouTube.js](https://github.com/LuanRT/YouTube.js)
+(MIT), and the adaptive player uses [Shaka Player](https://github.com/shaka-project/shaka-player)
+(Apache 2.0 and included component licenses). See
+[`THIRD_PARTY_NOTICES/litube-GPL-3.0-NOTICE.txt`](THIRD_PARTY_NOTICES/litube-GPL-3.0-NOTICE.txt).
+
 Our modern browser shell utilizes the following open-source frameworks and dependencies:
 
 | Dependency | Purpose | License |

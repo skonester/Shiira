@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { isYouTubeUrl } = require('../../shared/youtube');
 
 class ScriptInjector {
   constructor() {
@@ -52,14 +53,8 @@ class ScriptInjector {
       return;
     }
 
-    // Site-specific scripts are intentionally opt-in because they are highly browser- and site-sensitive.
-    // This avoids anti-adblock triggers and broken player behavior on sites like YouTube and Pornhub.
-    if (process.env.SHIIRA_ENABLE_YOUTUBE_ADBLOCK === '1') {
-      this.siteScripts.set('youtube.com', this.getYouTubeScript());
-      this.siteScripts.set('www.youtube.com', this.getYouTubeScript());
-      this.siteScripts.set('m.youtube.com', this.getYouTubeScript());
-      this.siteScripts.set('music.youtube.com', this.getYouTubeScript());
-    }
+    // YouTube uses the separate stream pipeline. Its legacy player-mutating
+    // script is retained below for reference and is no longer registered.
   }
 
   /**
@@ -694,7 +689,7 @@ class ScriptInjector {
    * @returns {string|null} Script content or null
    */
   getScriptForUrl(url) {
-    if (!this.enabled) return null;
+    if (!this.enabled || isYouTubeUrl(url)) return null;
     
     try {
       const urlObj = new URL(url);

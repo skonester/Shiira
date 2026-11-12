@@ -1,6 +1,7 @@
 // Arc's Tab to Search, adapted from YARC's src/shared/site-search.ts
 // (https://github.com/yenebeb/arc-shell, GPL-3.0-or-later).
 // See THIRD_PARTY_NOTICES/yarc-GPL-3.0-NOTICE.txt.
+import { searchUrl } from './search-model.js';
 export const SITE_SEARCHES = [
   ['Google Drive', 'drive.google.com', 'https://drive.google.com/drive/search?q=%s'],
   ['Gmail', 'mail.google.com', 'https://mail.google.com/mail/u/0/#search/%s'],
@@ -40,6 +41,7 @@ export function matchSiteSearch(input) {
   return SITE_SEARCHES.find(s => s.keyword.startsWith(text)) || SITE_SEARCHES.find(s => s.name.toLowerCase().startsWith(text));
 }
 
-export function siteSearchUrl(site, query) {
+export function siteSearchUrl(site, query, mode = 'web') {
+  if (site.keyword === 'scira.ai') return searchUrl(query, 'scira', mode);
   return site.url.replace('%s', encodeURIComponent(query.trim()));
 }

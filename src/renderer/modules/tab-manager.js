@@ -8,6 +8,7 @@
 import { isInternalUrl, getDomain, escapeHtml } from './utils.js';
 import { uid, letterIconUrl } from './spaces-model.js';
 import { parseSearchUrl } from './search-model.js';
+import { getHomepage } from './homepage.js';
 
 const WEBVIEW_PREFERENCES = 'contextIsolation=yes,devTools=no,plugins=yes,backgroundThrottling=no,v8CacheOptions=bypassHeatCheckAndEagerCompile';
 
@@ -223,7 +224,10 @@ export const TabManagerMixin = {
   },
 
   createTab(url = null, options = {}) {
-    if (!url) return this.createHomeTab(options);
+    // Search tabs call createHomeTab directly so a custom homepage never
+    // redirects the internal results surface. Private tabs keep their landing page.
+    if (!url) url = options.privateMode ? 'shiira://home' : getHomepage();
+    if (url === 'shiira://home') return this.createHomeTab(options);
     const search = parseSearchUrl(url);
     if (search) return this.createSearchTab(search.query, { ...options, provider: search.provider, mode: search.mode });
     const { deferLoad = false, title = null, favicon = null, privateMode = false, background = false } = options;
@@ -285,6 +289,7 @@ export const TabManagerMixin = {
       title,
       url: 'shiira://home',
       isHome: true,
+      homeSearchMode: this.sciraSearchMode || 'web',
       privateMode: options.privateMode === true,
       navigationHistory: ['shiira://home'],
       navigationIndex: 0
@@ -355,7 +360,7 @@ export const TabManagerMixin = {
         this.switchTab(next.id);
       } else {
         this.activeTabId = null;
-        this.createHomeTab();
+        this.createTab();
       }
     }
 
@@ -460,6 +465,7 @@ export const TabManagerMixin = {
     this.applySplitLayout?.();
     this.updateSidebarActive?.();
     this.onActiveTabChanged?.();
+    this.renderSearchFallbackNotice?.(tab);
     this.saveSpacesSoon?.();
   },
 
