@@ -84,14 +84,24 @@ Shiira is built for people who want a browser that feels like *their* workspace.
 
 ## Latest release — `0.3.9`
 
-Version 0.3.9 includes the settings and search fixes. Scira website searches keep the selected Web, Reddit or X source, including searches without an API key. Scira API issues remain under investigation; API failures open Scira's website in the same tab.
+Version 0.3.9 brings a major browser-engine upgrade, fixes YouTube Shorts compatibility, and updates clipboard handling, password-storage dependencies, packaging, and release checks.
+
+> [!IMPORTANT]
+> **Scira API key support is still under investigation.** This release does not resolve the Scira API integration issue. Scira website searches remain available, with Web, Reddit and X source selection preserved. When an API request fails or no key is configured, Shiira opens Scira's website in the same tab.
 
 <details>
 <summary><strong>See what changed</strong></summary>
 
-- Saved homepage settings apply to Home, new tabs and startup when a previous session is not restored.
-- Search key saves are confirmed through the operating system keychain and remain available after restart.
-- Scira website searches initialize the selected source before submitting, instead of inheriting the website's default Web source.
+- **Browser-engine upgrade:** moved from Castlabs Electron `39.0.0+wvcus` / Chromium `142.0.7444.52` to Castlabs Electron `45.2.1+wvcus` / Chromium `156.0.8078.75`, with embedded Node.js `24.22.1`. The application and packaged builds use the same pinned Castlabs runtime. See [runtime maintenance](docs/runtime.md) for the update policy and Castlabs' release cadence.
+- **Native YouTube Shorts playback:** disabled Shiira's built-in ad blocking and Litube stream replacement on `/shorts` pages by default, so Shorts uses YouTube's own player and scrolling feed.
+- **Navigation between Shorts and watch videos:** entering Shorts releases the replacement player and its pending media work, including when switching to the same video without a page reload. Returning to a regular watch page restores filtering and Litube playback. Direct Shorts loads receive the same exception. See [YouTube playback](docs/youtube-playback.md).
+- **Clipboard compatibility:** updated Copy image for Electron's asynchronous clipboard API, covering both image URLs and image data. Failed clipboard writes report an error instead of being treated as successful copies.
+- **Password-storage compatibility:** upgraded `better-sqlite3` to `13.1.1` and verified encrypted password creation, updates and deletion with the new runtime. SQLite and keytar use Node-API binaries, avoiding a rebuild for each Electron ABI.
+- **Widevine initialization:** restored explicit component initialization in the background, allowing the browser to open while Widevine installs or updates. Production streaming-service compatibility still depends on signing and provider requirements.
+- **Packaging and clean installs:** upgraded electron-builder to `26.18.0`, updated the sandboxed preload target for Chromium 156, explicitly unpacked native libraries, and added a lockfile workaround for npm's unnecessary SQLite compilation. The release workflow explicitly downloads the Castlabs runtime before building.
+- **Automated release checks:** added unit tests to the release workflow and a Windows runtime check before publishing. Expanded coverage includes encrypted SQLite storage, image clipboard handling, a local Manifest V3 extension, Shorts filtering exceptions, native playback, and transitions back to regular videos.
+
+Local verification passed **103 unit tests**, the YouTube playback and Shorts checks against both source and packaged Windows code, and Windows installer/portable builds. The broader Electron smoke suites also cover Arc import, search, settings persistence and Scira website source selection; these fixture checks do not establish that live Scira API key access is working.
 
 </details>
 
