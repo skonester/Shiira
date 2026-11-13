@@ -1,4 +1,4 @@
-const { isYouTubeUrl, videoIdFromUrl } = require('../shared/youtube');
+const { isYouTubeUrl, isYouTubeShortsUrl, playbackVideoIdFromUrl } = require('../shared/youtube');
 const { YouTubeService, deadline } = require('./youtube-service');
 
 function installYouTubePlayback({ app, BrowserWindow, ipcMain, session }) {
@@ -42,6 +42,9 @@ function installYouTubePlayback({ app, BrowserWindow, ipcMain, session }) {
       contents.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
         if (isMainFrame && !isInPlace) { owner.generation++; owner.source = null; service.clearMedia(); }
       });
+      contents.on('did-navigate-in-page', (_event, url, isMainFrame) => {
+        if (isMainFrame && isYouTubeShortsUrl(url)) { owner.generation++; owner.source = null; service.clearMedia(); }
+      });
       contents.once('destroyed', () => { service.dispose(); owners.delete(contents.id); });
     }
     return owner;
@@ -50,14 +53,14 @@ function installYouTubePlayback({ app, BrowserWindow, ipcMain, session }) {
   ipcMain.handle('youtube:resolve', async (event, options = {}) => {
     try {
       const owner = ownerFor(event);
-      const videoId = videoIdFromUrl(event.senderFrame.url);
+      const videoId = playbackVideoIdFromUrl(event.senderFrame.url);
       if (!videoId || options.videoId !== videoId || typeof options.fresh !== 'boolean') throw new Error('Invalid playback target');
       const generation = ++owner.generation;
       owner.service.clearMedia();
       owner.source = null;
       owner.videoId = videoId;
       const source = await owner.service.resolve(videoId, { fresh: options.fresh, rejectedClient: options.rejectedClient });
-      if (generation !== owner.generation || event.sender.isDestroyed() || videoIdFromUrl(event.sender.getURL()) !== videoId) {
+      if (generation !== owner.generation || event.sender.isDestroyed() || playbackVideoIdFromUrl(event.sender.getURL()) !== videoId) {
         return { error: 'Playback was cancelled' };
       }
       owner.source = source;
@@ -67,7 +70,7 @@ function installYouTubePlayback({ app, BrowserWindow, ipcMain, session }) {
   ipcMain.handle('youtube:media', async (event, options = {}) => {
     try {
       const owner = ownerFor(event);
-      if (!owner.source || videoIdFromUrl(event.senderFrame.url) !== owner.videoId) throw new Error('Playback was cancelled');
+      if (!owner.source || playbackVideoIdFromUrl(event.senderFrame.url) !== owner.videoId) throw new Error('Playback was cancelled');
       return await owner.service.media(options);
     } catch (error) {
       return { error: /^YouTube media (?:HTTP \d+|chunk too large)$/.test(error.message) ? error.message : 'YouTube media request failed' };
@@ -82,7 +85,7 @@ function installYouTubePlayback({ app, BrowserWindow, ipcMain, session }) {
   ipcMain.on('youtube:playing', (event) => {
     try {
       const owner = ownerFor(event);
-      if (owner.source && owner.videoId === videoIdFromUrl(event.senderFrame.url)) owner.service.notePlaying(owner.source);
+      if (owner.source && owner.videoId === playbackVideoIdFromUrl(event.senderFrame.url)) owner.service.notePlaying(owner.source);
     } catch { /* Ignore a late event from a departing page. */ }
   });
   app.on('before-quit', () => {

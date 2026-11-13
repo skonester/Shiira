@@ -7,7 +7,7 @@ const env = { ...process.env };
 // test needs Electron's browser process rather than its Node-only mode.
 delete env.ELECTRON_RUN_AS_NODE;
 const kind = process.argv[2] || 'arc';
-if (!['arc', 'search', 'scira-website', 'youtube'].includes(kind)) throw new Error('Unknown smoke test');
+if (!['runtime', 'arc', 'search', 'scira-website', 'youtube'].includes(kind)) throw new Error('Unknown smoke test');
 const resultFile = path.resolve(__dirname, `../tmp/${kind}-smoke/result.json`);
 fs.rmSync(resultFile, { force: true });
 const child = spawnSync(require('electron'), [path.join(__dirname, `electron-${kind}-smoke.cjs`)], {

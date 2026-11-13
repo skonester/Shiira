@@ -4,7 +4,7 @@ try {
   // Optional startup cache; the app runs normally if dependencies are not installed yet.
 }
 
-const { app, BrowserWindow, ipcMain, session, protocol, nativeImage, Menu, dialog, clipboard, shell, net } = require('electron');
+const { app, BrowserWindow, ipcMain, session, protocol, nativeImage, Menu, dialog, clipboard, ClipboardItem, shell, net } = require('electron');
 const { installYouTubePlayback } = require('./youtube-playback');
 
 // Packaged builds include this sandboxed bundle; source launches rebuild it so
@@ -855,11 +855,13 @@ function createWindow() {
 app.whenReady().then(async () => {
   browserSettings.initialize(path.join(app.getPath('userData'), 'browser-settings.json'));
   spacesService.initialize(path.join(app.getPath('userData'), 'spaces.json'));
-  // Wait for Widevine CDM to be ready (Castlabs Electron for DRM support)
-  // NOTE: Skipping components.whenReady() due to crash in Castlabs v39
-  // The CDM will still be downloaded/updated automatically in the background
+  // Install/update Widevine without holding offline browser startup on a download.
   if (components) {
-    console.log('[Widevine] Components API available - CDM will update in background');
+    components.whenReady().then(() => {
+      console.log('[Widevine] Components ready:', components.status());
+    }).catch((error) => {
+      console.warn('[Widevine] Components unavailable:', error.message);
+    });
   }
 
   // Set app icon for Windows taskbar/dock
@@ -1394,7 +1396,9 @@ ipcMain.handle('copy-image-url', async (event, url) => {
     if (url.startsWith('data:image/')) {
       const image = nativeImage.createFromDataURL(url);
       if (image.isEmpty()) throw new Error('Image data could not be decoded');
-      clipboard.writeImage(image);
+      await clipboard.write([new ClipboardItem({
+        'image/png': new Blob([image.toPNG()], { type: 'image/png' })
+      })]);
       return { success: true };
     }
 
@@ -1409,7 +1413,9 @@ ipcMain.handle('copy-image-url', async (event, url) => {
       throw new Error('Image data could not be decoded');
     }
 
-    clipboard.writeImage(image);
+    await clipboard.write([new ClipboardItem({
+      'image/png': new Blob([image.toPNG()], { type: 'image/png' })
+    })]);
     return { success: true };
   } catch (error) {
     console.error('[Clipboard] Failed to copy image:', error);

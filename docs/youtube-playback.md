@@ -1,8 +1,13 @@
 # YouTube playback
 
-YouTube watch, Shorts, live and embedded video pages use Shiira's separate
+YouTube watch, live and embedded video pages use Shiira's separate
 stream player by default. Browsing, comments and channel pages stay on YouTube.
 Hover over the video to find **Reload video** and **Use YouTube player**.
+
+**YouTube Shorts uses YouTube's native player by default.** Shiira's built-in
+ad blocking and Litube stream replacement are disabled on `/shorts` pages,
+including in-page navigation between watch videos and Shorts. Returning to a
+regular watch page restores filtering and the stream player.
 
 The primary pipeline adapts the supplied Litube v4 source to Electron:
 
@@ -27,7 +32,7 @@ The primary pipeline adapts the supplied Litube v4 source to Electron:
    clients have a five-second deadline, and media requests have a 20-second
    deadline. Failure returns to YouTube's player; there is no reload loop.
 
-Ghostery continues filtering other sites and YouTube's advertising/tracking
+Ghostery continues filtering other sites and non-Shorts YouTube advertising/tracking
 requests. YouTube page scriptlets and cosmetic player modifications are skipped,
 and player API/media requests are allowed. The legacy experimental YouTube ad
 script is no longer injected, even when its old environment flags are set.
@@ -53,13 +58,19 @@ npm run test:scira:website:electron
 
 The YouTube Electron test decodes synthetic H.264/AAC media through the real
 preload, IPC and Shaka path. It checks timestamps, consecutive videos, navigation
-races, HTTP 403 recovery, private playback and native fallback. Live-service
-verification is opt-in because YouTube availability and bot challenges vary:
+races, HTTP 403 recovery, private playback and native fallback.
+It also checks direct Shorts loads, watch-to-Shorts navigation for the same video,
+native Shorts playback, and filtering/player restoration on return to watch pages.
+Live-service verification is opt-in because YouTube availability and bot challenges vary:
 
 ```powershell
 $env:SHIIRA_YOUTUBE_LIVE='1'
 npm run test:youtube:electron
 ```
+
+To run the same fixture checks against a Windows package, set
+`SHIIRA_SMOKE_APP_ROOT` to the absolute path of
+`dist/win-unpacked/resources/app.asar` before running the smoke test.
 
 Upstream attribution and license copies are in
 `THIRD_PARTY_NOTICES/litube-GPL-3.0-NOTICE.txt`.

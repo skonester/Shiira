@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { YouTubeService, CLIENTS } = require('../src/main/youtube-service');
-const { videoIdFromUrl, startSeconds, isYouTubePlaybackRequest } = require('../src/shared/youtube');
+const { videoIdFromUrl, playbackVideoIdFromUrl, isYouTubeShortsUrl, startSeconds, isYouTubePlaybackRequest } = require('../src/shared/youtube');
 
 const ID = 'jNQXAC9IVRw';
 const URL = 'https://rr1.googlevideo.com/videoplayback?expire=9999999999&id=test';
@@ -30,6 +30,26 @@ test('YouTube URLs are host-scoped and preserve watch, short, live, embed and ti
   assert.equal(isYouTubePlaybackRequest({ url: 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false' }), true);
   assert.equal(isYouTubePlaybackRequest({ url: 'https://www.youtube.com/api/stats/ads' }), false);
   assert.equal(isYouTubePlaybackRequest({ url: 'https://googlevideo.com.evil.test/video' }), false);
+});
+
+test('Shorts defaults to native playback while ordinary video URLs remain eligible', () => {
+  for (const url of [
+    `https://www.youtube.com/shorts/${ID}`, `https://m.youtube.com/shorts/${ID}?feature=share`,
+    'https://youtube.com/shorts', 'https://youtube.com/shorts/'
+  ]) {
+    assert.equal(isYouTubeShortsUrl(url), true, url);
+    assert.equal(playbackVideoIdFromUrl(url), null, url);
+  }
+  for (const url of [
+    `https://www.youtube.com/watch?v=${ID}`, `https://youtu.be/${ID}`,
+    `https://www.youtube.com/live/${ID}`, `https://www.youtube-nocookie.com/embed/${ID}`
+  ]) {
+    assert.equal(isYouTubeShortsUrl(url), false, url);
+    assert.equal(playbackVideoIdFromUrl(url), ID, url);
+  }
+  for (const url of ['https://youtube.com.evil.test/shorts/test', 'https://example.com/shorts/test', 'https://youtube.com/shortstuff', 'not a URL']) {
+    assert.equal(isYouTubeShortsUrl(url), false, url);
+  }
 });
 
 test('starts with Litube VisionOS route, shares in-flight work and uses a bounded stream cache', async () => {

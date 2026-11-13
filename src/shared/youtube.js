@@ -20,6 +20,16 @@ function videoIdFromUrl(value) {
   return /^[\w-]{11}$/.test(id || '') ? id : null;
 }
 
+function isYouTubeShortsUrl(value) {
+  return isYouTubeUrl(value) && /^\/shorts(?:\/|$)/.test(new URL(value).pathname);
+}
+
+// Shorts keeps YouTube's native scrolling player, including same-video links
+// reached from a watch page without reloading the document.
+function playbackVideoIdFromUrl(value) {
+  return isYouTubeShortsUrl(value) ? null : videoIdFromUrl(value);
+}
+
 function startSeconds(value) {
   const url = new URL(value);
   const raw = url.searchParams.get('t') || url.searchParams.get('start') ||
@@ -48,4 +58,4 @@ function isYouTubePlaybackRequest(details) {
   } catch { return false; }
 }
 
-module.exports = { isYouTubeUrl, videoIdFromUrl, startSeconds, isMediaUrl, isYouTubePlaybackRequest };
+module.exports = { isYouTubeUrl, isYouTubeShortsUrl, videoIdFromUrl, playbackVideoIdFromUrl, startSeconds, isMediaUrl, isYouTubePlaybackRequest };

@@ -1,4 +1,4 @@
-const { videoIdFromUrl, startSeconds } = require('../shared/youtube');
+const { playbackVideoIdFromUrl, startSeconds } = require('../shared/youtube');
 
 // Runs in the tab's isolated, sandboxed preload. No API is exposed to the site.
 function installPlayer({ ipcRenderer, shaka, window, document }) {
@@ -25,7 +25,7 @@ function installPlayer({ ipcRenderer, shaka, window, document }) {
   }, shaka.net.NetworkingEngine.PluginPriority.APPLICATION);
 
   const pauseNative = (event) => {
-    if (!current || !videoIdFromUrl(window.location.href) || videoIdFromUrl(window.location.href) === nativeVideoId) return;
+    if (!current || !playbackVideoIdFromUrl(window.location.href) || playbackVideoIdFromUrl(window.location.href) === nativeVideoId) return;
     const video = event.target;
     if (video?.tagName === 'VIDEO' && video !== current?.video) video.pause();
   };
@@ -195,14 +195,14 @@ function installPlayer({ ipcRenderer, shaka, window, document }) {
       checking = false;
       if (disposed) return;
       const href = window.location.href;
-      const id = videoIdFromUrl(href);
+      const id = playbackVideoIdFromUrl(href);
       if (href !== lastUrl) {
         lastUrl = href;
         if (nativeVideoId !== id) nativeVideoId = null;
       }
       if (current && (current.videoId !== id || !current.container.isConnected || !current.overlay.isConnected)) stop();
       if (!id || id === nativeVideoId || current) return;
-      const container = document.querySelector('ytd-reel-video-renderer[is-active] #movie_player, #movie_player, #player-container #player');
+      const container = document.querySelector('#movie_player, #player-container #player');
       if (container) mount(container, id);
     });
   }

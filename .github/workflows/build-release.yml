@@ -41,12 +41,10 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-        env:
-          # The Git dependency also runs Electron's installer while npm prepares
-          # it. Download separately so upstream failures can be retried cleanly.
-          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
 
       - name: Download Castlabs Electron
+        # Electron 42+ downloads on first use instead of during npm install.
+        # Fetch explicitly here so upstream failures can be retried cleanly.
         shell: bash
         run: |
           for attempt in 1 2 3 4; do
@@ -60,6 +58,13 @@ jobs:
           done
           echo "Electron download failed after 4 attempts."
           exit 1
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Verify browser runtime on Windows
+        if: runner.os == 'Windows'
+        run: npm run test:runtime:electron
 
       - name: Build and publish
         run: npm run ${{ matrix.build-script }} -- --publish always

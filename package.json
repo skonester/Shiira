@@ -1,6 +1,6 @@
 {
   "name": "shiira-browser",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "description": "Shiira - A super dark browser inspired by the classic Shiira project",
   "main": "src/main/main.js",
   "scripts": {
@@ -8,6 +8,7 @@
     "start": "electron .",
     "dev": "electron . --enable-logging",
     "test": "node --test tests/*.test.js",
+    "test:runtime:electron": "node tests/run-electron-smoke.cjs runtime",
     "test:arc:electron": "node tests/run-electron-smoke.cjs arc",
     "test:search:electron": "node tests/run-electron-smoke.cjs search",
     "test:scira:website:electron": "node tests/run-electron-smoke.cjs scira-website",
@@ -35,8 +36,8 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.3",
-    "electron": "github:castlabs/electron-releases#v39.0.0+wvcus",
-    "electron-builder": "^24.9.1",
+    "electron": "github:castlabs/electron-releases#v45.2.1+wvcus",
+    "electron-builder": "^26.18.0",
     "esbuild": "^0.28.2",
     "jimp": "^1.6.0",
     "rcedit": "^5.0.2"
@@ -48,7 +49,11 @@
     "afterPack": "./build/afterPack.js",
     "beforePack": "./build/preloads.js",
     "electronDist": "node_modules/electron/dist",
-    "electronVersion": "39.0.0",
+    "electronVersion": "45.2.1",
+    "npmRebuild": false,
+    "asarUnpack": [
+      "**/*.node"
+    ],
     "directories": {
       "output": "dist"
     },
@@ -124,7 +129,7 @@
   },
   "dependencies": {
     "@ghostery/adblocker-electron": "^2.17.1",
-    "better-sqlite3": "^12.6.2",
+    "better-sqlite3": "^13.1.1",
     "darkreader": "^4.9.125",
     "electron-chrome-extensions": "4.10.0",
     "electron-chrome-web-store": "0.13.0",

@@ -7,7 +7,17 @@ const { app, session, ipcMain } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { ElectronBlocker } = require('@ghostery/adblocker-electron');
-const { isYouTubeUrl, isYouTubePlaybackRequest } = require('../../shared/youtube');
+const { isYouTubeUrl, isYouTubeShortsUrl, isYouTubePlaybackRequest } = require('../../shared/youtube');
+
+function isYouTubeShortsRequest(details) {
+  // A navigation belongs to its destination. Subresources belong to the tab's
+  // current page, since referrers can still name the previous SPA watch page.
+  if (details.resourceType === 'mainFrame') return isYouTubeShortsUrl(details.url);
+  const contents = details.webContents;
+  const pageUrl = contents && !contents.isDestroyed()
+    ? contents.getURL() : details.referrer || details.initiatorUrl;
+  return isYouTubeShortsUrl(pageUrl);
+}
 
 /**
  * Wraps a scriptlet so it runs only once per document. The block also keeps its helper declarations
@@ -90,8 +100,13 @@ class RequestHandler {
 
       const filterRequest = this.ghosteryBlocker.onBeforeRequest;
       this.ghosteryBlocker.onBeforeRequest = (details, callback) => {
-        if (isYouTubePlaybackRequest(details)) return callback({});
+        if (isYouTubeShortsRequest(details) || isYouTubePlaybackRequest(details)) return callback({});
         return filterRequest(details, callback);
+      };
+      const filterResponse = this.ghosteryBlocker.onHeadersReceived;
+      this.ghosteryBlocker.onHeadersReceived = (details, callback) => {
+        if (isYouTubeShortsRequest(details)) return callback({});
+        return filterResponse(details, callback);
       };
 
       this.enableGhosteryContexts();
@@ -183,7 +198,7 @@ class RequestHandler {
         return;
       }
 
-      if (isYouTubePlaybackRequest(details)) {
+      if (isYouTubeShortsRequest(details) || isYouTubePlaybackRequest(details)) {
         callback({});
         return;
       }

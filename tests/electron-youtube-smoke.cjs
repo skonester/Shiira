@@ -6,14 +6,21 @@ const os = require('node:os');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const { randomBytes } = require('node:crypto');
+const appRoot = process.env.SHIIRA_SMOKE_APP_ROOT ? path.resolve(process.env.SHIIRA_SMOKE_APP_ROOT) : path.resolve(__dirname, '..');
+const loadApp = file => require(path.join(appRoot, file));
+if (process.env.SHIIRA_SMOKE_APP_ROOT) {
+  Object.defineProperty(app, 'isPackaged', { value: true });
+  Object.defineProperty(process, 'resourcesPath', { value: path.dirname(appRoot) });
+  app.getAppPath = () => appRoot;
+}
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'shiira-electron-youtube-'));
 const artifacts = path.resolve(__dirname, '../tmp/youtube-smoke');
 fs.mkdirSync(artifacts, { recursive: true });
 app.setPath('userData', root);
 app.setPath('sessionData', root);
 app.on('browser-window-created', (_event, win) => { win.setSkipTaskbar(true); win.on('show', () => win.hide()); });
-require('../src/main/password-service').prototype.initializeEncryption = async function () { this.encryptionKey = randomBytes(32); };
-const { YouTubeService } = require('../src/main/youtube-service');
+loadApp('src/main/password-service').prototype.initializeEncryption = async function () { this.encryptionKey = randomBytes(32); };
+const { YouTubeService } = loadApp('src/main/youtube-service');
 const originalCreate = YouTubeService.prototype.createInnertube;
 const fixtureDir = path.join(__dirname, 'fixtures/youtube');
 const mpd = fs.readFileSync(path.join(fixtureDir, 'manifest.mpd'), 'utf8')
@@ -82,12 +89,12 @@ function finish(error) {
   finished = true;
   clearTimeout(watchdog);
   fs.writeFileSync(path.join(artifacts, 'result.json'), JSON.stringify({ success: !error,
-    error: error?.stack, temporaryProfile: root, plays, resolves, mediaRequests: media.length, errors, liveDiagnostics }, null, 2));
+    error: error?.stack, temporaryProfile: root, packaged: app.isPackaged, plays, resolves, mediaRequests: media.length, errors, liveDiagnostics }, null, 2));
   BrowserWindow.getAllWindows().forEach(win => win.destroy());
   app.exit(error ? 1 : 0);
 }
 process.on('unhandledRejection', finish);
-require('../src/main/main');
+loadApp('src/main/main');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function waitFor(check, label, timeout = 15000) {
   const until = Date.now() + timeout;
@@ -117,7 +124,9 @@ app.whenReady().then(async () => {
   try {
     const win = BrowserWindow.getAllWindows()[0];
     await waitFor(() => win.webContents.executeJavaScript('Boolean(window.ShiiraBrowser?.tabs)'), 'browser startup');
-    const website = async () => new Response(`<!doctype html><style>body{margin:0;background:#111}#movie_player{width:640px;height:360px;background:#222}</style>
+    const website = async request => new URL(request.url).pathname === '/shiira-native-fixture.mp4'
+      ? new Response(fs.readFileSync(path.join(fixtureDir, 'fixture-0.mp4')), { headers: { 'content-type': 'video/mp4' } })
+      : new Response(`<!doctype html><style>body{margin:0;background:#111}#movie_player{width:640px;height:360px;background:#222}</style>
       <title>YouTube transport fixture</title><div id="movie_player"><video></video><div>Native player fixture</div></div>
       <script>window.nativeMutations=0;window.addEventListener('error',e=>console.error(e.message));</script>`, { headers: {
         'content-type': 'text/html', 'content-security-policy': "require-trusted-types-for 'script'; trusted-types default goog#html shaka-player#xml"
@@ -140,6 +149,42 @@ app.whenReady().then(async () => {
       await waitFor(() => plays.some(p => p.id === id), `SPA playback ${id}`);
       assert.equal(await guest.executeJavaScript("document.querySelectorAll('#shiira-youtube-player').length"), 1);
     }
+    // Use a deterministic ad request to exercise the real session hooks. Its
+    // outcome must follow the current SPA page, rather than an old referrer.
+    const blocker = loadApp('src/main/ad-blocker').getAdBlocker();
+    await waitFor(() => blocker.initialized, 'ad blocker startup');
+    const engine = blocker.ghosteryBlocker || blocker.ruleEngine;
+    const method = blocker.ghosteryBlocker ? 'match' : 'shouldBlock';
+    const originalFilter = engine[method];
+    engine[method] = function (request, ...args) {
+      if (request.url.includes('/shiira-ad-fixture')) return method === 'match' ? { match: true } : { action: 'block' };
+      return originalFilter.call(this, request, ...args);
+    };
+    const adRequestAllowed = () => guest.executeJavaScript("fetch('/shiira-ad-fixture', {cache:'no-store'}).then(()=>true,()=>false)");
+    assert.equal(await adRequestAllowed(), false, 'Watch pages still filter advertising');
+    const beforeShorts = resolves.length;
+    await guest.executeJavaScript("history.pushState({},'', '/shorts/thirdvideo1');document.dispatchEvent(new Event('yt-navigate-finish'));");
+    await waitFor(() => guest.executeJavaScript("!document.querySelector('#shiira-youtube-player') && !document.querySelector('[data-shiira-player]')"), 'Shorts releases the same-video replacement');
+    assert.equal(await adRequestAllowed(), true, 'Shorts bypasses advertising filters');
+    await guest.executeJavaScript("const native = document.querySelector('#movie_player video'); native.src='/shiira-native-fixture.mp4'; native.play();", true);
+    await waitFor(() => guest.executeJavaScript("document.querySelector('#movie_player video').currentTime > 0.25"), 'native Shorts video keeps playing');
+    assert.equal(resolves.length, beforeShorts, 'Shorts does not extract any streams');
+    const beforeReturn = plays.length;
+    await guest.executeJavaScript("history.pushState({},'', '/watch?v=thirdvideo1');document.dispatchEvent(new Event('yt-navigate-finish'));");
+    await waitFor(() => plays.length > beforeReturn, 'watch playback resumes after Shorts');
+    assert.equal(await adRequestAllowed(), false, 'Filtering resumes after leaving Shorts');
+
+    // Direct Shorts loads also stay native, then allow SPA watch playback.
+    const beforeDirectShorts = resolves.length;
+    await guest.loadURL('https://www.youtube.com/shorts/shortsvideo');
+    await delay(750);
+    assert.equal(await guest.executeJavaScript("Boolean(document.querySelector('#shiira-youtube-player'))"), false);
+    assert.equal(resolves.length, beforeDirectShorts);
+    assert.equal(await adRequestAllowed(), true);
+    await guest.executeJavaScript("history.pushState({},'', '/watch?v=returnvid01');document.dispatchEvent(new Event('yt-navigate-finish'));");
+    await waitFor(() => plays.some(p => p.id === 'returnvid01'), 'watch playback after a direct Shorts load');
+    assert.equal(await adRequestAllowed(), false);
+    engine[method] = originalFilter;
     // Recover a refused media URL onto a different client without looping.
     failMedia = true;
     await guest.executeJavaScript("history.pushState({},'', '/watch?v=recovervid1');document.dispatchEvent(new Event('yt-navigate-finish'));");

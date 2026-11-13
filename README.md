@@ -1,3 +1,5 @@
+[Read a review of Shiira Browser](https://www.byearc.workers.dev/browsers/shiira/)
+
 <div align="center">
 
   <img src="Shiira.png" alt="Shiira Browser logo" width="128" height="128">
@@ -35,8 +37,8 @@
 
 | | |
 | --- | --- |
-| **Engine** | Chromium via Electron |
-| **Release** | `0.3.8` |
+| **Engine** | Chromium 156 via Castlabs Electron 45 ([runtime maintenance](docs/runtime.md)) |
+| **Release** | `0.3.9` |
 | **Platforms** | Windows · macOS · Linux |
 | **License** | GPL-3.0-only |
 | **Best for** | Tab-heavy workflows, customization, and focused browsing |
@@ -80,9 +82,9 @@ Shiira is built for people who want a browser that feels like *their* workspace.
 - Optional clear-on-exit cache behavior and straightforward browsing-data controls.
 - Password storage backed by the operating system keychain.
 
-## Latest release — `0.3.8`
+## Latest release — `0.3.9`
 
-Version 0.3.8 includes the settings and search fixes. Scira website searches keep the selected Web, Reddit or X source, including searches without an API key. Scira API issues remain under investigation; API failures open Scira's website in the same tab.
+Version 0.3.9 includes the settings and search fixes. Scira website searches keep the selected Web, Reddit or X source, including searches without an API key. Scira API issues remain under investigation; API failures open Scira's website in the same tab.
 
 <details>
 <summary><strong>See what changed</strong></summary>
