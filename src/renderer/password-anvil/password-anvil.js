@@ -60,7 +60,7 @@ function renderPasswords(passwordList) {
                 <div class="password-username">${escapeHtml(pwd.username)}</div>
             </div>
             <div class="password-actions">
-                <button class="icon-btn" onclick="copyPassword(${pwd.id})">Copy</button>
+                <button class="icon-btn" onclick="copyPassword(${pwd.id}, this)">Copy</button>
                 <button class="icon-btn" onclick="editPassword(${pwd.id})">Edit</button>
                 <button class="icon-btn delete" onclick="deletePassword(${pwd.id})">Delete</button>
             </div>
@@ -159,13 +159,14 @@ async function deletePassword(id) {
     }
 }
 
-async function copyPassword(id) {
+async function copyPassword(id, button) {
     const password = passwords.find(p => p.id === id);
     if (password) {
-        await navigator.clipboard.writeText(password.password);
+        await window.shiiraAPI.clipboard.writeText(password.password);
         
         // Show feedback
-        const btn = event.target;
+        const btn = button;
+        if (!btn) return;
         const originalText = btn.textContent;
         btn.textContent = 'Copied!';
         btn.style.background = '#4CAF50';
@@ -315,19 +316,19 @@ async function handleTextContextAction(action) {
         case 'cut':
             if (input.selectionStart !== input.selectionEnd) {
                 const selectedText = input.value.substring(input.selectionStart, input.selectionEnd);
-                await navigator.clipboard.writeText(selectedText);
+                await window.shiiraAPI.clipboard.writeText(selectedText);
                 document.execCommand('delete');
             }
             break;
         case 'copy':
             if (input.selectionStart !== input.selectionEnd) {
                 const selectedText = input.value.substring(input.selectionStart, input.selectionEnd);
-                await navigator.clipboard.writeText(selectedText);
+                await window.shiiraAPI.clipboard.writeText(selectedText);
             }
             break;
         case 'paste':
             try {
-                const text = await navigator.clipboard.readText();
+                const text = await window.shiiraAPI.clipboard.readText();
                 document.execCommand('insertText', false, text);
             } catch (err) {
                 console.error('[TextContextMenu] Paste failed:', err);

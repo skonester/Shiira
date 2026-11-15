@@ -10,6 +10,7 @@ export const WebviewEventsMixin = {
     
     // Close bookmark context menus when webview receives focus (user clicked inside)
     webview.addEventListener('focus', () => {
+      if (self.splitPair?.includes(tabId) && tabId !== self.activeTabId) self.switchTab(tabId);
       if (self.hideAllContextMenus) {
         self.hideAllContextMenus();
       }
@@ -49,6 +50,12 @@ export const WebviewEventsMixin = {
       // Store URL on the tab object for other methods to use
       if (tab) {
         tab.url = e.url;
+        tab.hasUserInput = false;
+        tab.isPictureInPicture = false;
+        tab.sleepBlocked = false;
+        self.updateLittleWindow?.();
+        tab.mediaState = null;
+        self.renderMiniPlayers?.();
         self.recordTabNavigation?.(tab, e.url);
       }
       
@@ -72,7 +79,7 @@ export const WebviewEventsMixin = {
       if (tab && !tab.privateMode && !isInternalUrl(e.url)) {
         const title = tab ? tab.title : 'New Tab';
         const favicon = tab ? tab.favicon : null;
-        self.addToHistory(e.url, title, favicon);
+        self.addToHistory(e.url, title, favicon, self.profileForTab?.(tab) || 'default');
       }
       
       // Inject scripts
@@ -94,6 +101,7 @@ export const WebviewEventsMixin = {
           self.injectPasswordAutofill(webview, url);
           self.injectLinkRouting(webview, url);
           self.injectForcedDarkMode?.(webview, url);
+          if (tabId === self.activeTabId) self.updateDeveloperMode?.();
           if (tabId === self.activeTabId) {
             self.updateNavigationButtons();
           }
@@ -120,7 +128,7 @@ export const WebviewEventsMixin = {
       if (e.isMainFrame && tab && !tab.privateMode && !isInternalUrl(e.url)) {
         const title = tab ? tab.title : 'New Tab';
         const favicon = tab ? tab.favicon : null;
-        self.addToHistory(e.url, title, favicon);
+        self.addToHistory(e.url, title, favicon, self.profileForTab?.(tab) || 'default');
         self.injectCosmeticCSS(webview, e.url);
         self.injectAdBlockScript(webview, e.url);
         self.injectLinkRouting(webview, e.url);
@@ -212,33 +220,39 @@ export const WebviewEventsMixin = {
       }
     });
     
-    // Audio state checking
-    const checkAudioState = async () => {
+    // Event-driven media state replaces a 500 ms IPC poll for every loaded tab.
+    const mediaState = playing => {
       const tab = self.tabs.find(t => t.id === tabId);
-      if (!tab || !tab.webview) return;
-      
-      try {
-        const webContentsId = webview.getWebContentsId ? webview.getWebContentsId() : null;
-        if (webContentsId) {
-          const isAudible = await window.shiiraAPI.isWebContentsAudible(webContentsId);
-          if (isAudible !== tab.isPlayingAudio) {
-            tab.isPlayingAudio = isAudible;
-            self.updateTabAudioIcon(tabId);
-          }
-        }
-      } catch (e) {}
+      if (!tab) return;
+      tab.isPlayingAudio = playing;
+      self.updateTabAudioIcon(tabId);
     };
-    
-    webview.addEventListener('dom-ready', () => {
-      const interval = setInterval(checkAudioState, 500);
+    webview.addEventListener('media-started-playing', () => mediaState(true));
+    webview.addEventListener('media-paused', () => mediaState(false));
+    webview.addEventListener('ipc-message', event => {
       const tab = self.tabs.find(t => t.id === tabId);
-      if (tab) tab.audioCheckInterval = interval;
-      checkAudioState();
-    }, { once: true });
+      if (!tab) return;
+      if (event.channel === 'shiira-page-edited') tab.hasUserInput = true;
+      if (event.channel === 'shiira-page-pip') tab.isPictureInPicture = event.args[0] === true;
+      if (event.channel === 'shiira-media-state') {
+        const state = event.args[0];
+        if (!state || typeof state.paused !== 'boolean') return;
+        const previous = tab.mediaState;
+        if (!state.paused && tab.mediaState?.paused !== false) tab.mediaDismissed = false;
+        tab.mediaState = { paused: state.paused, muted: state.muted === true,
+          time: Number.isFinite(state.time) ? Math.max(0, state.time) : 0, duration: Number.isFinite(state.duration) ? Math.max(0, state.duration) : 0 };
+        tab.isPlayingAudio = !state.paused;
+        self.updateTabAudioIcon(tab.id);
+        if (!previous || previous.paused !== state.paused || previous.muted !== state.muted || previous.duration !== state.duration) self.renderMiniPlayers?.();
+        else self.updateMiniPlayerProgress?.(tab);
+      }
+    });
+
   },
 
   openLinkInTabOnce(url, sourceTabId = this.activeTabId) {
     if (!url || url === 'about:blank') return;
+    if (this.isLittle) { void window.shiiraAPI.externalLinks.openMain(url); return; }
 
     const now = Date.now();
     if (!this._recentlyOpenedLinks) {

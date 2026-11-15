@@ -10,7 +10,7 @@ import { uid, letterIconUrl } from './spaces-model.js';
 import { parseSearchUrl } from './search-model.js';
 import { getHomepage } from './homepage.js';
 
-const WEBVIEW_PREFERENCES = 'contextIsolation=yes,devTools=no,plugins=yes,backgroundThrottling=no,v8CacheOptions=bypassHeatCheckAndEagerCompile';
+const WEBVIEW_PREFERENCES = 'contextIsolation=yes,devTools=yes,plugins=yes,backgroundThrottling=no,v8CacheOptions=bypassHeatCheckAndEagerCompile';
 
 export const TabManagerMixin = {
   initTabManager() {
@@ -172,10 +172,12 @@ export const TabManagerMixin = {
     return tab;
   },
 
-  createTabWebview(tabId, privateMode = false) {
+  createTabWebview(tabId, privateMode = false, profileId = null) {
     const webview = document.createElement('webview');
     webview.id = tabId;
-    webview.setAttribute('partition', privateMode ? `private:${tabId}` : 'persist:main');
+    const tab = this.tabs.find(t => t.id === tabId);
+    const profile = profileId || this.profileForTab?.(tab) || 'default';
+    webview.setAttribute('partition', privateMode ? this.privatePartition(tabId) : (this.partitionForProfile?.(profile) || 'persist:main'));
     webview.setAttribute('webpreferences', WEBVIEW_PREFERENCES);
 
     this.setupWebviewEvents(webview, tabId);
@@ -203,6 +205,7 @@ export const TabManagerMixin = {
     tabData.itemId = options.itemId || uid('i-');
     tabData.section = section;
     tabData.spaceId = section === 'favorites' ? null : (options.spaceId || this.focusedSpaceId || null);
+    tabData.profileId = options.profileId || this.profileForSpace?.(options.spaceId || this.focusedSpaceId) || 'default';
     tabData.parentId = section === 'pinned' ? (options.parentId || null) : null;
     tabData.customTitle = options.customTitle || '';
     tabData.pinnedUrl = section === 'today' ? null : (options.pinnedUrl || tabData.url || null);
@@ -224,6 +227,11 @@ export const TabManagerMixin = {
   },
 
   createTab(url = null, options = {}) {
+    if (this.isLittle && this.activeTabId) {
+      if (url) this.navigate(url);
+      else this.urlInput?.focus();
+      return this.activeTabId;
+    }
     // Search tabs call createHomeTab directly so a custom homepage never
     // redirects the internal results surface. Private tabs keep their landing page.
     if (!url) url = options.privateMode ? 'shiira://home' : getHomepage();
@@ -241,7 +249,8 @@ export const TabManagerMixin = {
     this.tabsContainer.appendChild(tab);
 
     // Deferred tabs start asleep (no webview, no page process) until they are opened.
-    const webview = deferLoad ? null : this.createTabWebview(tabId, privateMode);
+    const profileId = options.profileId || this.profileForSpace?.(options.spaceId || this.focusedSpaceId) || 'default';
+    const webview = deferLoad ? null : this.createTabWebview(tabId, privateMode, profileId);
     if (deferLoad) tab.classList.add('tab-suspended');
 
     // Store tab info
@@ -314,6 +323,8 @@ export const TabManagerMixin = {
 
   // The tab to show after `tab` goes away: its neighbour in the same space, or nothing.
   pickNextTab(tab) {
+    const splitNeighbor = this.splitPair?.map(id => this.tabs.find(t => t.id === id)).find(t => t && t.id !== tab.id && !t.element.classList.contains('closing'));
+    if (splitNeighbor) return splitNeighbor;
     const order = (this.getVisibleTabOrder?.() || this.tabs).filter(t => !t.element.classList.contains('closing'));
     const index = order.findIndex(t => t.id === tab.id);
     const rest = order.filter(t => t.id !== tab.id);
@@ -338,7 +349,7 @@ export const TabManagerMixin = {
         // Ignore errors getting URL
       }
       if (url && url !== 'about:blank') {
-        this.closedTabs.unshift({ url, title: tab.title || 'Closed Tab', closedAt: Date.now() });
+        this.closedTabs.unshift({ url, title: tab.title || 'Closed Tab', closedAt: Date.now(), spaceId: tab.spaceId, profileId: this.profileForTab?.(tab) || 'default' });
         // Keep only the most recent closed tabs
         if (this.closedTabs.length > this.maxClosedTabs) {
           this.closedTabs.pop();
@@ -376,6 +387,7 @@ export const TabManagerMixin = {
 
       const index = this.tabs.indexOf(tab);
       if (index !== -1) this.tabs.splice(index, 1);
+      this.renderMiniPlayers?.();
       this.placeTabElements?.();
       this.saveSpacesSoon?.();
     };
@@ -388,10 +400,16 @@ export const TabManagerMixin = {
   },
 
   switchTab(tabId) {
+    const previousId = this.activeTabId;
     const tab = this.tabs.find(t => t.id === tabId);
     if (!tab) return;
 
     // Opening a tab from another space (command bar, archive) moves the sidebar to that space.
+    if (tab.section === 'favorites' && this.favoriteVisible?.(tab) === false) {
+      const space = this.spaces.find(s => (s.profileId || 'default') === (tab.profileId || 'default'));
+      if (!space) return;
+      this.focusSpace(space.id, { activate: false });
+    }
     if (tab.spaceId && this.focusedSpaceId && tab.spaceId !== this.focusedSpaceId) {
       this.focusSpace?.(tab.spaceId, { activate: false });
     }
@@ -405,6 +423,8 @@ export const TabManagerMixin = {
 
     tab.element.classList.add('active');
     this.activeTabId = tabId;
+    this.tabActivationCounter = (this.tabActivationCounter || 0) + 1;
+    tab.activationOrder = this.tabActivationCounter;
     tab.lastActiveAt = Date.now();
     if (this.activeBySpace && this.focusedSpaceId) this.activeBySpace[this.focusedSpaceId] = tabId;
     this.runPageTurn?.();
@@ -463,6 +483,10 @@ export const TabManagerMixin = {
     }
 
     this.applySplitLayout?.();
+    this.handleMediaTabChange?.(previousId, tabId);
+    this.updateDeveloperMode?.();
+    this.updateLittleWindow?.();
+    this.renderMiniPlayers?.();
     this.updateSidebarActive?.();
     this.onActiveTabChanged?.();
     this.renderSearchFallbackNotice?.(tab);
@@ -582,7 +606,9 @@ export const TabManagerMixin = {
     if (this.closedTabs.length === 0) return false;
 
     const closedTab = this.closedTabs.shift(); // Get and remove the most recent
-    this.createTab(closedTab.url);
+    const space = this.spaceForProfile(closedTab.profileId || 'default', closedTab.spaceId);
+    if (!space) { this.closedTabs.unshift(closedTab); this.setStatus?.('Create a Space for this browser profile before reopening its tab.', 3000); return false; }
+    this.createTab(closedTab.url, { spaceId: space.id });
     return true;
   },
 
@@ -630,6 +656,7 @@ export const TabManagerMixin = {
     if (!tab) return;
 
     tab.title = title;
+    tab.sharedTitle = title;
     const titleElement = tab.element.querySelector('.tab-title');
     // A name the user gave the tab wins over the page's own title.
     if (tab.customTitle) {
@@ -703,6 +730,7 @@ export const TabManagerMixin = {
     const tab = this.tabs.find(t => t.id === tabId);
     if (tab && !tab.isHome) {
       tab.favicon = faviconUrl;
+      tab.sharedFavicon = faviconUrl;
       const iconElement = tab.element.querySelector('.tab-favicon');
       if (iconElement) {
         iconElement.src = faviconUrl;

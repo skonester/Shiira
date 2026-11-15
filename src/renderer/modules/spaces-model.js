@@ -2,6 +2,7 @@
 // No DOM access here, so this file can be tested with node:test.
 // The data model follows Solamar (https://github.com/Bambeek/solamar, GPL-3.0-or-later):
 // favorites are shared by every space, each space has pinned tabs (with folders) and today tabs.
+import { protectsWork } from './tab-lifecycle.js';
 
 export const SPACE_COLORS = ['#7c6cf2', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#28d7ef', '#64748b'];
 export const SPACE_ICONS = ['🏠', '💼', '🎮', '📚', '🎵', '✈️', '🛒', '🧪', '💡', '🌙', '⭐', '🔥', '🎨', '📰', '💬', '🌿'];
@@ -93,7 +94,7 @@ const MINUTE = 60 * 1000;
 /** Today tabs nobody looked at for `hours` go to the archive. Never the tab on screen, one playing sound, or a private tab. */
 export function shouldArchive(tab, { now, hours, activeIds = [] }) {
   if (!hours || hours <= 0) return false;
-  if (tab.section !== 'today' || tab.isHome || tab.privateMode || tab.isPlayingAudio) return false;
+  if (tab.section !== 'today' || tab.isHome || tab.privateMode || protectsWork(tab)) return false;
   if (activeIds.includes(tab.id)) return false;
   return now - (tab.lastActiveAt || now) >= hours * HOUR;
 }
@@ -101,7 +102,7 @@ export function shouldArchive(tab, { now, hours, activeIds = [] }) {
 /** Tabs idle for `minutes` give up their page process; they reload when opened again. */
 export function shouldSleep(tab, { now, minutes, activeIds = [] }) {
   if (!minutes || minutes <= 0) return false;
-  if (!tab.webview || tab.isHome || tab.privateMode || tab.isPlayingAudio) return false;
+  if (!tab.webview || tab.isHome || tab.privateMode || protectsWork(tab)) return false;
   if (activeIds.includes(tab.id)) return false;
   return now - (tab.lastActiveAt || now) >= minutes * MINUTE;
 }

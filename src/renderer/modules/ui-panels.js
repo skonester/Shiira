@@ -34,7 +34,7 @@ export const UIPanelsMixin = {
   },
 
   handleMainMenuAction(action) {
-    const panelActions = ['history', 'password-anvil', 'vault', 'themes', 'settings', 'import-chrome', 'about', 'shiira-palettes', 'tab-expose', 'private-tab'];
+    const panelActions = ['history', 'password-anvil', 'vault', 'themes', 'settings', 'import-chrome', 'import-browsers', 'about', 'shiira-palettes', 'tab-expose', 'private-tab'];
     const toggleActions = ['favorites', 'adblock', 'shield', 'bookmarks-bar']; // Actions that don't close the menu
     const isOpeningPanel = panelActions.includes(action);
     const isToggleAction = toggleActions.includes(action);
@@ -79,9 +79,9 @@ export const UIPanelsMixin = {
         this.showTabExpose();
         break;
       case 'import-chrome':
+      case 'import-browsers':
         this.hideMainMenu(true); // Instant hide
-        this.showChromeImportPanel();
-        this.renderChromeImportPanel();
+        this.showBrowserImport();
         break;
       case 'about':
         this.hideMainMenu(true); // Instant hide
@@ -101,7 +101,7 @@ export const UIPanelsMixin = {
 
   // Chrome Import panel
   showChromeImportPanel() {
-    this.chromeImportPanel?.classList.remove('hidden');
+    return this.showBrowserImport();
   },
 
   hideChromeImportPanel() {
@@ -109,9 +109,7 @@ export const UIPanelsMixin = {
   },
 
   async renderChromeImportPanel() {
-    if (!this.chromeImportContent) return;
-    this.chromeImportContent.innerHTML = '<div class="loading">Loading...</div>';
-    // TODO: Implement Chrome import
+    return this.showBrowserImport();
   },
 
   // About panel
@@ -191,7 +189,7 @@ export const UIPanelsMixin = {
         this.updateStatusElement.className = 'about-update-status error';
         this.lastUpdateError = data.error || 'Unknown error';
         document.getElementById('copy-error-btn')?.addEventListener('click', async () => {
-          await navigator.clipboard.writeText(this.lastUpdateError);
+          await window.shiiraAPI.clipboard.writeText(this.lastUpdateError);
           const btn = document.getElementById('copy-error-btn');
           if (btn) {
             btn.textContent = 'Copied!';
@@ -228,6 +226,8 @@ export const UIPanelsMixin = {
 
   // Close all popups
   closeAllPopups() {
+    void this.hideWorkspace?.();
+    this.hideAllContextMenus();
     this.hideMainMenu();
     this.hideTabContextMenu();
     this.hideWebviewContextMenu();
@@ -239,6 +239,11 @@ export const UIPanelsMixin = {
     this.hidePasswordModal();
     this.hideVaultPanel?.();
     this.hideChromeImportPanel();
+    this.hideBrowserImport?.();
+    this.cancelTabSwitcher?.();
+    this.cancelAreaCapture?.();
+    this.hideBoosts?.();
+    this.cancelActiveZap?.();
     this.hideSuggestions();
     this.hideShiiraDrawer?.();
     this.hideTabExpose?.();
@@ -248,6 +253,7 @@ export const UIPanelsMixin = {
     this.closePeek?.();
     this.hideArchivePanel?.();
     this.hideSpaceEditor?.();
+    document.getElementById('little-spaces')?.classList.add('hidden');
     if (this.extensionPrompt) this.decideExtensionInstall?.(false);
   }
 };

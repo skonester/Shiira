@@ -19,31 +19,26 @@ const TextContextMenuMixin = {
     // Track current target input
     this.textContextTarget = null;
     
-    // Bind context menu to URL input
-    if (this.urlInput) {
-      this.urlInput.addEventListener('contextmenu', (e) => {
+    // One delegated handler covers existing fields and dynamically added dialogs.
+    document.addEventListener('contextmenu', (e) => {
+      const target = e.target;
+      if (!target) return;
+      if (target.closest('webview') || target.tagName === 'WEBVIEW') return;
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+      if (isInput) {
         e.preventDefault();
-        this.showTextContextMenu(e, this.urlInput);
-      });
-    }
-    
-    // Bind context menu to home search input
-    if (this.homeSearch) {
-      this.homeSearch.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        this.showTextContextMenu(e, this.homeSearch);
-      });
-    }
-    
-    // Bind context menu to ALL text/password inputs in modals
-    this.bindModalTextInputs();
-    
+        e.stopPropagation();
+        this.showTextContextMenu(e, target);
+      }
+    });
+
     // Set up context menu item click handlers
     this.textContextMenu.querySelectorAll('.context-menu-item').forEach(item => {
       item.addEventListener('click', (e) => {
         e.stopPropagation(); // Prevent click from reaching modal overlay
+        if (item.classList.contains('disabled')) return;
         const action = item.dataset.action;
-        this.handleTextContextAction(action);
+        this.handleTextContextAction(action).catch(error => console.error('[TextContextMenu] Action failed:', error));
       });
     });
     
@@ -61,66 +56,33 @@ const TextContextMenuMixin = {
       e.stopPropagation();
     });
     this.textContextMenu.addEventListener('mousedown', (e) => {
+      e.preventDefault(); // Keep the input's focus and selection while choosing an action.
       e.stopPropagation();
     });
     this.textContextMenu.addEventListener('mouseup', (e) => {
       e.stopPropagation();
+    });
+
+    this.contextMenuOverlay?.addEventListener('mousedown', (e) => {
+      if (e.target !== this.contextMenuOverlay) return;
+      e.preventDefault();
+      this.hideAllContextMenus();
     });
     
     console.log('[TextContextMenu] Initialized');
   },
 
   /**
-   * Bind context menu to all text inputs in modals
-   */
-  bindModalTextInputs() {
-    // Define all modal input field IDs that should have context menu
-    const inputIds = [
-      // Bookmark popup
-      'bookmark-name',
-      'bookmark-url',
-      'bookmark-new-folder-name',
-      // Add folder modal
-      'add-folder-name',
-      // Bookmark edit modal
-      'bookmark-edit-title',
-      'bookmark-edit-url',
-      // Password manager modal
-      'password-url',
-      'password-username',
-      'password-password',
-      // Prompt modal
-      'prompt-modal-input'
-    ];
-    
-    // Bind to each input
-    inputIds.forEach(id => {
-      const input = document.getElementById(id);
-      if (input) {
-        input.addEventListener('contextmenu', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          this.showTextContextMenu(e, input);
-        });
-      }
-    });
-    
-    // Also bind to Password Anvil inputs (separate HTML file)
-    // These will be bound when Password Anvil window opens
-    console.log('[TextContextMenu] Bound to modal text inputs');
-  },
-
-  /**
    * Show text context menu at cursor position
    */
   showTextContextMenu(e, inputElement) {
+    this.hideAllContextMenus();
+    clearTimeout(this.textContextMenuHideTimer);
+    this.textContextMenuHideTimer = null;
     this.textContextTarget = inputElement;
     
     // Update menu items based on input state
     this.updateTextContextMenuState(inputElement);
-    
-    // Hide other context menus first
-    this.hideAllContextMenus();
     
     // Position the menu
     const menu = this.textContextMenu;
@@ -178,6 +140,8 @@ const TextContextMenuMixin = {
    */
   hideTextContextMenu() {
     if (!this.textContextMenu || this.textContextMenu.classList.contains('hidden')) return;
+
+    this.contextMenuOverlay?.classList.add('hidden');
     
     // Set flag to prevent modal from closing immediately after context menu action
     this.textContextMenuRecentlyUsed = true;
@@ -187,9 +151,11 @@ const TextContextMenuMixin = {
     
     this.textContextMenu.classList.add('closing');
     
-    setTimeout(() => {
+    clearTimeout(this.textContextMenuHideTimer);
+    this.textContextMenuHideTimer = setTimeout(() => {
       this.textContextMenu.classList.add('hidden');
       this.textContextMenu.classList.remove('closing');
+      this.textContextMenuHideTimer = null;
     }, 150);
     
     this.textContextTarget = null;
@@ -220,6 +186,10 @@ const TextContextMenuMixin = {
       this.hideTextContextMenu();
       return;
     }
+
+    // Release the overlay before waiting on the OS clipboard. A delayed or
+    // rejected request must not block clicks or close a newly opened menu.
+    this.hideAllContextMenus();
     
     // Focus the input to ensure operations work
     input.focus();
@@ -236,7 +206,7 @@ const TextContextMenuMixin = {
       case 'cut':
         if (input.selectionStart !== input.selectionEnd) {
           const selectedText = input.value.substring(input.selectionStart, input.selectionEnd);
-          await navigator.clipboard.writeText(selectedText);
+          await window.shiiraAPI.clipboard.writeText(selectedText);
           const start = input.selectionStart;
           const end = input.selectionEnd;
           input.value = input.value.substring(0, start) + input.value.substring(end);
@@ -248,13 +218,13 @@ const TextContextMenuMixin = {
       case 'copy':
         if (input.selectionStart !== input.selectionEnd) {
           const selectedText = input.value.substring(input.selectionStart, input.selectionEnd);
-          await navigator.clipboard.writeText(selectedText);
+          await window.shiiraAPI.clipboard.writeText(selectedText);
         }
         break;
         
       case 'paste':
         try {
-          const text = await navigator.clipboard.readText();
+          const text = await window.shiiraAPI.clipboard.readText();
           const start = input.selectionStart;
           const end = input.selectionEnd;
           input.value = input.value.substring(0, start) + text + input.value.substring(end);
@@ -280,8 +250,6 @@ const TextContextMenuMixin = {
         input.select();
         break;
     }
-    
-    this.hideTextContextMenu();
   }
 };
 

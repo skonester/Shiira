@@ -2,6 +2,7 @@
 // Today tabs are not stored here; they follow the session restore setting (session.dat).
 
 const fs = require('fs');
+const { validProfile } = require('./profiles-service');
 
 const LIMITS = { spaces: 50, folders: 1000, items: 3000, archive: 500 };
 const SECTIONS = new Set(['pinned', 'favorites']);
@@ -46,6 +47,7 @@ function sanitize(doc) {
     spaceIds.add(spaceId);
     spaces.push({
       id: spaceId,
+      profileId: validProfile(space.profileId) ? space.profileId : 'default',
       title: text(space.title, 60) || 'Space',
       icon: text(space.icon, 16),
       color: color(space.color),
@@ -70,7 +72,13 @@ function sanitize(doc) {
   }
   // A folder whose parent is gone moves to the top of its section.
   for (const folder of folders) {
-    if (folder.parentId && !folderIds.has(folder.parentId)) folder.parentId = null;
+    const parent = folders.find(f => f.id === folder.parentId);
+    if (!parent || parent.spaceId !== folder.spaceId) folder.parentId = null;
+    const seen = new Set([folder.id]); let cursor = folder.parentId;
+    while (cursor) {
+      if (seen.has(cursor)) { folder.parentId = null; break; }
+      seen.add(cursor); cursor = folders.find(f => f.id === cursor)?.parentId;
+    }
   }
 
   const items = [];
@@ -85,9 +93,10 @@ function sanitize(doc) {
     const parentId = favorite ? null : id(item.parentId);
     items.push({
       id: itemId,
+      profileId: validProfile(item.profileId) ? item.profileId : 'default',
       spaceId: favorite ? null : item.spaceId,
       section: item.section,
-      parentId: parentId && folderIds.has(parentId) ? parentId : null,
+      parentId: parentId && folders.some(f => f.id === parentId && f.spaceId === item.spaceId) ? parentId : null,
       url,
       pinnedUrl: safeUrl(item.pinnedUrl) || url,
       title: text(item.title, 300),
@@ -106,6 +115,7 @@ function sanitize(doc) {
       title: text(entry.title, 300),
       favicon: safeFavicon(entry.favicon),
       spaceId: spaceIds.has(entry.spaceId) ? entry.spaceId : null,
+      profileId: validProfile(entry.profileId) ? entry.profileId : spaces.find(s => s.id === entry.spaceId)?.profileId || 'default',
       archivedAt: finite(entry.archivedAt, Date.now())
     });
   }

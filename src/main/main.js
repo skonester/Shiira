@@ -1,16 +1,14 @@
-try {
-  require('v8-compile-cache-lib');
-} catch (error) {
-  // Optional startup cache; the app runs normally if dependencies are not installed yet.
-}
-
-const { app, BrowserWindow, ipcMain, session, protocol, nativeImage, Menu, dialog, clipboard, ClipboardItem, shell, net } = require('electron');
+const { app, BrowserWindow, ipcMain, session, protocol, nativeImage, Menu, dialog, clipboard, ClipboardItem, shell, net, webContents } = require('electron');
+app.setName('Shiira');
+const { createStartupSplash } = require('./startup');
 const { installYouTubePlayback } = require('./youtube-playback');
+const log = require('electron-log');
 
 // Packaged builds include this sandboxed bundle; source launches rebuild it so
 // Electron's restricted preload never needs Node or arbitrary module loading.
 if (!app.isPackaged) require('../../build/preloads').buildPreloads();
-installYouTubePlayback({ app, BrowserWindow, ipcMain, session });
+installYouTubePlayback({ app, BrowserWindow, ipcMain, session, dialog, isTrusted: isBrowserChromeSender,
+  onDiagnostic: details => log.info('[YouTube]', details) });
 
 // Try to import components for Castlabs Electron (Widevine DRM support)
 let components = null;
@@ -61,14 +59,29 @@ const passwordService = new PasswordService();
 
 // Initialize Bookmarks Service
 const bookmarksService = new BookmarksService();
+require('./browser-import-service').installBrowserImports({ ipcMain, dialog, BrowserWindow, bookmarksService, isTrusted: isBrowserChromeSender });
 
 // Initialize Privacy Service
 const privacyService = new PrivacyService();
 const browserSettings = new BrowserSettings();
 const spacesService = new SpacesService();
+const sidebarSync = new (require('./sidebar-sync').SidebarSync)(spacesService);
+const profilesService = new (require('./profiles-service').ProfilesService)();
+require('./workspace-service').installWorkspaces({ app, ipcMain, BrowserWindow, webContents, dialog, nativeImage,
+  isTrusted: isBrowserChromeSender, hasProfile: id => profilesService.has(id) });
+let configurePageSession = () => {};
+const permissionSessions = new WeakSet();
 const extensionsService = new ExtensionsService();
+const { ShortcutsService, installShortcuts } = require('./shortcuts-service');
+const shortcutsService = new ShortcutsService();
+installShortcuts({ service: shortcutsService, ipcMain, BrowserWindow, isTrusted: isBrowserChromeSender });
 // Arc sidebar files the user found or picked; the renderer may only read these.
 const allowedArcFiles = new Set();
+require('./boosts-service').installBoosts({ app, ipcMain, webContents: require('electron').webContents, isTrusted: isBrowserChromeSender });
+const mediaCaptureGrants = new WeakSet();
+const activeDownloadPages = new WeakMap();
+require('./page-tools-service').installPageTools({ ipcMain, webContents: require('electron').webContents, dialog, clipboard, ClipboardItem, nativeImage, BrowserWindow,
+  isTrusted: isBrowserChromeSender, isBusy: page => mediaCaptureGrants.has(page) || (activeDownloadPages.get(page) || 0) > 0 });
 
 // Initialize Shield (encrypted DNS / DNS-over-HTTPS)
 const dnsShield = new DnsShield();
@@ -78,6 +91,11 @@ let vaultService = null;
 
 // Initialize Ad Blocker (network blocking)
 const adBlocker = getAdBlocker();
+adBlocker.on('stats-updated', (stats) => {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed() && !win.webContents.isDestroyed()) win.webContents.send('adblock-stats-updated', stats);
+  }
+});
 
 // Initialize Cosmetic Injector (element hiding)
 const cosmeticInjector = getCosmeticInjector();
@@ -97,9 +115,6 @@ let hardwareAccelerationProfile = {
 };
 
 configureHardwareAcceleration();
-
-// Set app name for taskbar
-app.setName('Shiira');
 
 // Set Windows app user model ID for proper taskbar identification
 // Using a unique ID based on version to bypass icon cache
@@ -179,11 +194,6 @@ function installBrowserHeaderOverrides(sessionInstance) {
 
 function configureHardwareAcceleration() {
   const enabledFeatures = [
-    'Vulkan',
-    'VulkanFromANGLE',
-    'DefaultANGLEVulkan',
-    'CanvasOopRasterization',
-    'UseSkiaRenderer',
     'BackForwardCache',
     'ParallelDownloading',
     'LazyFrameLoading',
@@ -191,18 +201,13 @@ function configureHardwareAcceleration() {
     'Prerender2',
     'SpeculationRulesPrerenderProxy',
     'ServiceWorkerBypassFetchHandler',
-    'SharedArrayBuffer',
-    'CalculateNativeWinOcclusion'
+    'SharedArrayBuffer'
   ];
 
-  app.commandLine.appendSwitch('ignore-gpu-blocklist');
-  app.commandLine.appendSwitch('enable-gpu-rasterization');
-  app.commandLine.appendSwitch('enable-zero-copy');
-  app.commandLine.appendSwitch('enable-native-gpu-memory-buffers');
-  app.commandLine.appendSwitch('enable-accelerated-video-decode');
+  // Let Chromium select the supported graphics/decoder backend on each OS.
+  // Forcing ANGLE/Vulkan and bypassing its driver blocklist can corrupt the
+  // already-rendered home surface as well as video decode/compositing.
   app.commandLine.appendSwitch('enable-features', enabledFeatures.join(','));
-  app.commandLine.appendSwitch('use-angle', 'vulkan');
-  app.commandLine.appendSwitch('enable-unsafe-webgpu');
   app.commandLine.appendSwitch('enable-quic');
   app.commandLine.appendSwitch('enable-parallel-downloading');
   app.commandLine.appendSwitch('disable-renderer-backgrounding');
@@ -235,7 +240,7 @@ async function detectHardwareAccelerationProfile() {
     hardwareAccelerationProfile = {
       avx2: normalizedFlags.split(/\s+/).includes('avx2'),
       vulkanLikely,
-      renderer: vulkanLikely ? 'vulkan-angle' : 'default',
+      renderer: 'default',
       controllers: rendererNames
     };
 
@@ -250,6 +255,17 @@ let mainWindow = null;
 
 // Track all open browser windows for session management
 const browserWindows = new Set();
+let externalLinks = null;
+externalLinks = new (require('./external-links-service').ExternalLinksService)({ app, ipcMain, BrowserWindow, isTrusted: isBrowserChromeSender,
+  getSpaces: () => spacesService.load()?.spaces || [],
+  getIcon: () => getAssetPath('shiira-logo.ico'), installWebviewPreload, extensionsService,
+  handleInput: handleKeyboardShortcut, log,
+  ensureMain: () => {
+    const current = [...browserWindows].find(win => !win.isDestroyed());
+    if (current) return current;
+    createWindow();
+    return mainWindow;
+  } });
 
 // Session file path for tab persistence
 function getSessionFilePath() {
@@ -370,46 +386,22 @@ function clearSession() {
 
 // Handle keyboard shortcuts globally
 function handleKeyboardShortcut(event, input, targetWindow) {
-  if (input.type !== 'keyDown') return;
-  
-  const ctrl = input.control || input.meta;
-  const shift = input.shift;
-  const alt = input.alt;
-  const key = input.key.toLowerCase();
-  
-  // Define shortcuts that should be handled by the browser UI
-  let shortcut = null;
-
-  if (ctrl && alt && !shift && key === 'arrowright') shortcut = 'next-space';
-  else if (ctrl && alt && !shift && key === 'arrowleft') shortcut = 'prev-space';
-  else if (alt && !ctrl && !shift && /^[1-9]$/.test(key)) shortcut = `space-${key}`;
-  else if (ctrl && !shift && !alt && key === 's') shortcut = 'toggle-sidebar';
-  else if (ctrl && !shift && !alt && key === 'd') shortcut = 'pin-tab';
-  else if (ctrl && shift && (key === '\\' || key === '|')) shortcut = 'split-view';
-  else if (ctrl && shift && key === 'a') shortcut = 'archive';
-  else if (ctrl && shift && key === 'c') shortcut = 'copy-url';
-  else if (ctrl && shift && key === 'n') shortcut = 'private-tab';
-  else if (ctrl && !shift && key === 't') shortcut = 'new-tab';
-  else if (ctrl && !shift && key === 'w') shortcut = 'close-tab';
-  else if (ctrl && shift && key === 't') shortcut = 'reopen-tab';
-  else if (ctrl && !shift && key === 'tab') shortcut = 'next-tab';
-  else if (ctrl && shift && key === 'tab') shortcut = 'prev-tab';
-  else if (ctrl && !shift && key === 'l') shortcut = 'focus-url';
-  else if (ctrl && shift && key === 'r') shortcut = 'hard-reload';
-  else if (ctrl && !shift && key === 'r') shortcut = 'reload';
-  else if (!ctrl && !shift && !alt && key === 'f5') shortcut = 'reload';
-  else if (alt && !ctrl && key === 'arrowleft') shortcut = 'go-back';
-  else if (alt && !ctrl && key === 'arrowright') shortcut = 'go-forward';
-  else if (ctrl && !shift && key === 'h') shortcut = 'show-history';
-  else if (ctrl && !shift && key === ',') shortcut = 'show-settings';
-  else if (ctrl && shift && key === 'b') shortcut = 'toggle-bookmarks-bar';
-  else if (ctrl && shift && key === 'e') shortcut = 'tab-expose';
-  else if (key === 'escape') shortcut = 'close-popups';
-  
-  if (shortcut) {
+  const captured = shortcutsService.capture(targetWindow.webContents.id, input);
+  if (captured) {
     event.preventDefault();
-    targetWindow.webContents.send('keyboard-shortcut', shortcut);
+    if (!captured.waiting) targetWindow.webContents.send('shortcuts-recorded', captured);
+    return;
   }
+  if (input.type === 'keyUp' && input.key === 'Control') {
+    targetWindow.webContents.send('keyboard-shortcut', 'commit-tab-switcher');
+    return;
+  }
+  if (input.type !== 'keyDown' || input.isComposing) return;
+  const shortcut = shortcutsService.resolve(input);
+  if (!shortcut) return;
+  event.preventDefault();
+  if (externalLinks?.handleShortcut(targetWindow, shortcut)) return;
+  targetWindow.webContents.send('keyboard-shortcut', shortcut);
 }
 
 function isOAuthPopupUrl(url, features = '', disposition = '') {
@@ -432,6 +424,11 @@ function routeWindowOpen(contents, details = {}) {
 
   const parentWindow = BrowserWindow.fromWebContents(contents.hostWebContents || contents);
   if (!parentWindow || parentWindow.isDestroyed()) {
+    return { action: 'deny' };
+  }
+
+  if (externalLinks?.isLittle(parentWindow) && !isOAuthPopupUrl(url, features, disposition)) {
+    void externalLinks.openMain(url);
     return { action: 'deny' };
   }
 
@@ -460,7 +457,11 @@ function installDownloadPrompt(sessionInstance) {
   const pendingUrls = new Map();
   pendingDownloads.set(sessionInstance, pendingUrls);
 
-  sessionInstance.on('will-download', async (event, item) => {
+  sessionInstance.on('will-download', async (event, item, page) => {
+    if (page) {
+      activeDownloadPages.set(page, (activeDownloadPages.get(page) || 0) + 1);
+      item.once('done', () => activeDownloadPages.set(page, Math.max(0, (activeDownloadPages.get(page) || 1) - 1)));
+    }
     const url = item.getURL();
     const metadata = pendingUrls.get(url) || {};
     pendingUrls.delete(url);
@@ -532,6 +533,8 @@ app.on('web-contents-created', (event, contents) => {
   
   // Only handle webview webContents
   if (contents.getType() === 'webview') {
+    configurePageSession(contents.session);
+    contents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => { if (mainFrame && !inPlace) mediaCaptureGrants.delete(contents); });
     const webviewSession = contents.session;
     if (webviewSession && SHIIRA_CONFIG.userAgent) {
       webviewSession.setUserAgent(SHIIRA_CONFIG.userAgent);
@@ -542,8 +545,9 @@ app.on('web-contents-created', (event, contents) => {
 
     contents.on('before-input-event', (event, input) => {
       // Find the parent BrowserWindow to send the shortcut to
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        handleKeyboardShortcut(event, input, mainWindow);
+      const owner = BrowserWindow.fromWebContents(contents.hostWebContents || contents);
+      if (owner && !owner.isDestroyed()) {
+        handleKeyboardShortcut(event, input, owner);
       }
     });
   }
@@ -558,7 +562,7 @@ const SHIIRA_CONFIG = {
   userAgent: null // Will be set dynamically
 };
 
-function createWindow() {
+function createWindow(startupSplash) {
   // Load icon - use absolute path and verify it exists
   const iconPath = getAssetPath('shiira-logo.ico');
   console.log('[Icon] Icon path:', iconPath);
@@ -577,7 +581,8 @@ function createWindow() {
     title: SHIIRA_CONFIG.name,
     icon: icon,
     frame: false, // Custom titlebar for lightweight feel
-    backgroundColor: '#161616',
+    show: false,
+    backgroundColor: '#020308',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -590,13 +595,17 @@ function createWindow() {
     }
   });
 
-  mainWindow.webContents.on('will-attach-webview', (_event, webPreferences) => {
-    // Site-specific behavior runs before page scripts in an isolated sandbox.
-    webPreferences.preload = path.join(__dirname, '../preload/webview.bundle.js');
-    webPreferences.nodeIntegration = false;
-    webPreferences.contextIsolation = true;
-    webPreferences.sandbox = true;
-  });
+  if (startupSplash) {
+    startupSplash.attachTo(mainWindow);
+  } else {
+    const window = mainWindow;
+    window.once('ready-to-show', () => {
+      window.maximize();
+      window.show();
+    });
+  }
+
+  installWebviewPreload(mainWindow);
   
   // Explicitly set the icon for Windows taskbar
   if (process.platform === 'win32') {
@@ -623,12 +632,21 @@ function createWindow() {
   session.defaultSession.setUserAgent(SHIIRA_CONFIG.userAgent);
 
   // Runtime cache for temporary permissions (cleared on restart)
-  const runtimePermissions = new Map(); // Format: "hostname:permission" -> true/false
 
   // Set up permission request handler for security
   // This controls access to sensitive device capabilities
   const setupPermissionHandlers = (sessionInstance, sessionName) => {
+    if (permissionSessions.has(sessionInstance)) return;
+    permissionSessions.add(sessionInstance);
+    const runtimePermissions = new Map();
+    const disk = sessionInstance.getStoragePath();
+    const shared = sessionInstance === session.defaultSession || sessionInstance === session.fromPartition('persist:main');
+    const permissionSite = host => shared ? host : `[${disk ? path.basename(disk) : 'private'}] ${host}`;
     sessionInstance.setPermissionRequestHandler(async (webContents, permission, callback, details) => {
+      if (permission === 'media' || permission === 'display-capture') {
+        const respond = callback;
+        callback = granted => { if (granted) mediaCaptureGrants.add(webContents); respond(granted); };
+      }
       const url = webContents.getURL();
       
       // Get hostname from URL
@@ -684,7 +702,7 @@ function createWindow() {
       }
       
       // Check if permission was previously granted/denied (saved or runtime)
-      const savedPermission = privacyService.getPermissionForSite(hostname, specificPermission);
+      const savedPermission = disk ? privacyService.getPermissionForSite(permissionSite(hostname), specificPermission) : null;
       const runtimePermission = runtimePermissions.get(`${hostname}:${specificPermission}`);
       const existingPermission = savedPermission ?? runtimePermission;
       
@@ -703,12 +721,16 @@ function createWindow() {
           try {
             // Send permission request to renderer and wait for response
             const response = await new Promise((resolve) => {
-              const requestId = Date.now().toString();
+              const requestId = crypto.randomUUID();
               
               // Set up one-time listener for response
-              ipcMain.once(`permission-response-${requestId}`, (event, granted, remember) => {
-                resolve({ granted, remember });
-              });
+              const channel = `permission-response-${requestId}`;
+              const answer = (event, granted, remember) => {
+                if (event.sender !== window.webContents || !isBrowserChromeSender(event)) return;
+                clearTimeout(timer); ipcMain.removeListener(channel, answer);
+                resolve({ granted: granted === true, remember: remember === true });
+              };
+              ipcMain.on(channel, answer);
               
               // Send request to renderer
               window.webContents.send('permission-request', {
@@ -719,12 +741,12 @@ function createWindow() {
               });
               
               // Timeout after 60 seconds
-              setTimeout(() => resolve({ granted: false, remember: false }), 60000);
+              const timer = setTimeout(() => { ipcMain.removeListener(channel, answer); resolve({ granted: false, remember: false }); }, 60000);
             });
             
             // Save permission if user chose to remember
-            if (response.remember) {
-              privacyService.setPermissionForSite(hostname, specificPermission, response.granted);
+            if (response.remember && disk) {
+              privacyService.setPermissionForSite(permissionSite(hostname), specificPermission, response.granted);
               console.log(`[Permissions] 💾 Saved: ${hostname} - ${specificPermission} = ${response.granted ? '✓ ALLOW' : '❌ DENY'}`);
             } else {
               // Store in runtime cache for this session
@@ -763,9 +785,9 @@ function createWindow() {
       // So we need to check all possible media-related permissions
       if (permission === 'media') {
         // Check both saved and runtime permissions
-        const micPermission = privacyService.getPermissionForSite(hostname, 'microphone') ?? runtimePermissions.get(`${hostname}:microphone`);
-        const camPermission = privacyService.getPermissionForSite(hostname, 'camera') ?? runtimePermissions.get(`${hostname}:camera`);
-        const mediaPermission = privacyService.getPermissionForSite(hostname, 'media') ?? runtimePermissions.get(`${hostname}:media`);
+        const micPermission = (disk ? privacyService.getPermissionForSite(permissionSite(hostname), 'microphone') : null) ?? runtimePermissions.get(`${hostname}:microphone`);
+        const camPermission = (disk ? privacyService.getPermissionForSite(permissionSite(hostname), 'camera') : null) ?? runtimePermissions.get(`${hostname}:camera`);
+        const mediaPermission = (disk ? privacyService.getPermissionForSite(permissionSite(hostname), 'media') : null) ?? runtimePermissions.get(`${hostname}:media`);
         
         // If any media permission was granted, return true
         if (micPermission === true || camPermission === true || mediaPermission === true) {
@@ -778,7 +800,7 @@ function createWindow() {
         }
       } else {
         // For non-media permissions, check saved and runtime
-        const savedPermission = privacyService.getPermissionForSite(hostname, permission);
+        const savedPermission = disk ? privacyService.getPermissionForSite(permissionSite(hostname), permission) : null;
         const runtimePermission = runtimePermissions.get(`${hostname}:${permission}`);
         const finalPermission = savedPermission ?? runtimePermission;
         
@@ -817,12 +839,15 @@ function createWindow() {
   installDownloadPrompt(webviewSession);
   preconnectBrowserSession(session.defaultSession);
   preconnectBrowserSession(webviewSession);
+  configurePageSession = activeSession => {
+    setupPermissionHandlers(activeSession, 'profile');
+    activeSession.setUserAgent(SHIIRA_CONFIG.userAgent);
+    installBrowserHeaderOverrides(activeSession); installDownloadPrompt(activeSession);
+    adBlocker.attachPageSession(activeSession);
+  };
 
   // Load the browser UI
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
-
-  // Maximize window on startup
-  mainWindow.maximize();
 
   // Handle keyboard shortcuts globally (for main window, not webviews)
   // Webviews are handled separately via app.on('web-contents-created')
@@ -851,10 +876,22 @@ function createWindow() {
   });
 }
 
+function installWebviewPreload(window) {
+  window.webContents.on('will-attach-webview', (_event, webPreferences) => {
+    webPreferences.preload = path.join(__dirname, '../preload/webview.bundle.js');
+    webPreferences.nodeIntegration = false;
+    webPreferences.contextIsolation = true;
+    webPreferences.sandbox = true;
+  });
+}
+
 // App lifecycle
 app.whenReady().then(async () => {
+  const startupSplash = createStartupSplash({ app, BrowserWindow, ipcMain });
   browserSettings.initialize(path.join(app.getPath('userData'), 'browser-settings.json'));
   spacesService.initialize(path.join(app.getPath('userData'), 'spaces.json'));
+  profilesService.initialize(path.join(app.getPath('userData'), 'profiles.json'));
+  shortcutsService.initialize(path.join(app.getPath('userData'), 'shortcuts.json'));
   // Install/update Widevine without holding offline browser startup on a download.
   if (components) {
     components.whenReady().then(() => {
@@ -890,9 +927,13 @@ app.whenReady().then(async () => {
     }
   });
 
-  // Show the window immediately so the app feels responsive.
-  // Heavy startup services run in the background afterwards.
-  createWindow();
+  // The splash covers startup while the browser restores its initial tab.
+  createWindow(startupSplash);
+  for (const profile of profilesService.list()) if (profile.id !== 'default') {
+    configurePageSession(session.fromPartition(profile.partition));
+    extensionsService.ensureProfile(profile.id, profile.partition);
+  }
+  externalLinks.start();
 
   // Start slow tasks without blocking the first window.
   detectHardwareAccelerationProfile().catch((error) => {
@@ -1010,15 +1051,18 @@ ipcMain.handle('window-is-maximized', (event) => {
 
 // Session management IPC handlers
 ipcMain.handle('session-save', (event, sessionData) => {
+  if (externalLinks.isLittleSender(event)) return false;
   saveSession(sessionData);
   return true;
 });
 
-ipcMain.handle('session-load', () => {
+ipcMain.handle('session-load', event => {
+  if (externalLinks.isLittleSender(event)) return null;
   return loadSession();
 });
 
-ipcMain.handle('session-clear', () => {
+ipcMain.handle('session-clear', event => {
+  if (externalLinks.isLittleSender(event)) return false;
   clearSession();
   return true;
 });
@@ -1055,7 +1099,8 @@ ipcMain.handle('create-new-window', (event, url) => {
     title: SHIIRA_CONFIG.name,
     icon: path.join(__dirname, '../../assets/shiira-logo.ico'),
     frame: false,
-    backgroundColor: '#161616',
+    show: false,
+    backgroundColor: '#020308',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -1067,6 +1112,10 @@ ipcMain.handle('create-new-window', (event, url) => {
       webviewTag: true
     }
   });
+
+  installWebviewPreload(newWindow);
+  newWindow.webContents.on('before-input-event', (event, input) => handleKeyboardShortcut(event, input, newWindow));
+  newWindow.once('ready-to-show', () => newWindow.show());
   
   session.defaultSession.setUserAgent(SHIIRA_CONFIG.userAgent);
   
@@ -1084,9 +1133,7 @@ ipcMain.handle('create-new-window', (event, url) => {
   
   // If URL is provided, send it to the new window once it's ready
   if (url) {
-    newWindow.webContents.once('did-finish-load', () => {
-      newWindow.webContents.send('open-url', url);
-    });
+    void externalLinks.openInWindow(newWindow, url);
   }
   
   return newWindow.id;
@@ -1219,7 +1266,7 @@ ipcMain.handle('privacy-set-setting', (event, key, value) => {
 });
 
 ipcMain.handle('privacy-clear-browsing-data', async (event, kind = 'cache') => {
-  const targets = [session.defaultSession, session.fromPartition('persist:main')];
+  const targets = [session.defaultSession, ...profilesService.list().map(p => session.fromPartition(p.partition))];
   try {
     await Promise.all(targets.map(async (targetSession) => {
       if (kind === 'cache' || kind === 'cookies-and-cache') {
@@ -1278,8 +1325,33 @@ ipcMain.handle('downloads-open-directory', async () => {
 });
 
 // Spaces, pinned tabs, favorites and archive (Arc-style sidebar)
-ipcMain.handle('spaces-load', () => spacesService.load());
-ipcMain.handle('spaces-save', (event, doc) => spacesService.save(doc));
+ipcMain.handle('profiles-list', event => isBrowserChromeSender(event) ? profilesService.list() : []);
+ipcMain.handle('profiles-rename', (event, id, name) => {
+  if (!isBrowserChromeSender(event) || externalLinks.isLittleSender(event)) return { error: 'Unavailable.' };
+  try {
+    const profiles = profilesService.rename(id, name);
+    for (const win of browserWindows) if (!win.isDestroyed()) win.webContents.send('profiles-changed', profiles);
+    return { profiles };
+  } catch (error) { return { error: error.message }; }
+});
+ipcMain.handle('profiles-create', (event, name) => {
+  if (!isBrowserChromeSender(event) || externalLinks.isLittleSender(event)) return { error: 'Unavailable.' };
+  try {
+    const profile = profilesService.create(name);
+    configurePageSession(session.fromPartition(profile.partition));
+    extensionsService.ensureProfile(profile.id, profile.partition);
+    for (const win of browserWindows) if (!win.isDestroyed()) win.webContents.send('profiles-changed', profilesService.list());
+    return { profile, profiles: profilesService.list() };
+  } catch (error) { return { error: error.message }; }
+});
+ipcMain.handle('spaces-load', event => isBrowserChromeSender(event) ? sidebarSync.load() : null);
+ipcMain.handle('spaces-save', async (event, doc, revision) => {
+  if (!isBrowserChromeSender(event) || externalLinks.isLittleSender(event)) return { success: false, error: 'This window cannot save Spaces.' };
+  if ([...(Array.isArray(doc?.spaces) ? doc.spaces : []), ...(Array.isArray(doc?.items) ? doc.items : [])].some(row => !profilesService.has(row?.profileId || 'default'))) return { success: false, error: 'A selected browser profile is unavailable.' };
+  const result = await sidebarSync.save(doc, revision);
+  if (result.success) for (const win of browserWindows) if (!win.isDestroyed() && win.webContents !== event.sender) win.webContents.send('spaces-changed', result.doc);
+  return result;
+});
 
 // Arc import: Arc's files are only read. The renderer can only read a file the user found or picked here.
 function arcPreview(filePath) {
@@ -1503,18 +1575,27 @@ ipcMain.handle('bookmarks-delete-icon', (event, bookmarkId) => {
   return bookmarksService.deleteCustomIcon(bookmarkId);
 });
 
-// Search credentials and API requests are available only to the browser chrome,
-// never to websites or extension pages sharing its preload bridge.
-function isSearchSender(event) {
+// Browser-chrome APIs are available only to the local UI, never to websites or
+// extension pages sharing its preload bridge.
+function isBrowserChromeSender(event) {
   const { pathToFileURL } = require('url');
-  const expected = pathToFileURL(path.join(__dirname, '../renderer/index.html')).href;
-  return event.senderFrame === event.sender.mainFrame && event.senderFrame?.url === expected;
+  const rendererRoot = pathToFileURL(path.join(__dirname, '../renderer')).href;
+  const frameUrl = event.senderFrame?.url;
+  return event.senderFrame === event.sender.mainFrame && typeof frameUrl === 'string' &&
+    (frameUrl === pathToFileURL(path.join(__dirname, '../renderer/index.html')).href ||
+     frameUrl.startsWith(rendererRoot + '/'));
 }
-ipcMain.handle('search-status', event => isSearchSender(event) ? searchService.status() : {});
-ipcMain.handle('search-set-key', (event, provider, key) => isSearchSender(event) ? searchService.setKey(provider, key) : { success: false, error: 'Unavailable.' });
+ipcMain.handle('clipboard-read-text', event => isBrowserChromeSender(event) ? clipboard.readText() : '');
+ipcMain.handle('clipboard-write-text', async (event, text) => {
+  if (!isBrowserChromeSender(event) || typeof text !== 'string') throw new Error('Unavailable.');
+  await clipboard.writeText(text);
+  return true;
+});
+ipcMain.handle('search-status', event => isBrowserChromeSender(event) ? searchService.status() : {});
+ipcMain.handle('search-set-key', (event, provider, key) => isBrowserChromeSender(event) ? searchService.setKey(provider, key) : { success: false, error: 'Unavailable.' });
 const searchOwners = new Set();
 ipcMain.handle('search-query', (event, request) => {
-  if (!isSearchSender(event)) return { success: false, error: 'Unavailable.' };
+  if (!isBrowserChromeSender(event)) return { success: false, error: 'Unavailable.' };
   const owner = event.sender.id;
   if (!searchOwners.has(owner)) {
     searchOwners.add(owner);
@@ -1523,10 +1604,10 @@ ipcMain.handle('search-query', (event, request) => {
   return searchService.search(owner, request);
 });
 ipcMain.handle('search-cancel', (event, id) => {
-  if (isSearchSender(event) && typeof id === 'string') searchService.cancel(event.sender.id, id);
+  if (isBrowserChromeSender(event) && typeof id === 'string') searchService.cancel(event.sender.id, id);
 });
 ipcMain.handle('get-url-suggestions', async (event, query, provider) => {
-  if (!isSearchSender(event) || !privacyService.isUrlSuggestionsEnabled() || privacyService.getSuggestionsProvider() === 'none') return [];
+  if (!isBrowserChromeSender(event) || !privacyService.isUrlSuggestionsEnabled() || privacyService.getSuggestionsProvider() === 'none') return [];
   return searchService.suggest(query, provider);
 });
 

@@ -7,8 +7,8 @@ import { escapeHtml } from './utils.js';
 const PARTITION = 'persist:main';
 const WEB_STORE = 'https://chromewebstore.google.com/';
 
-function iconUrl(id) {
-  return `crx://extension-icon/${id}/32/2?partition=${encodeURIComponent(PARTITION)}`;
+function iconUrl(id, partition = PARTITION) {
+  return `crx://extension-icon/${id}/32/2?partition=${encodeURIComponent(partition)}`;
 }
 
 export const ExtensionsMixin = {
@@ -57,8 +57,10 @@ export const ExtensionsMixin = {
   },
 
   // chrome.tabs.create / windows.create from an extension: a normal Shiira tab, reported back once attached.
-  openTabForExtension({ requestId, url, active }) {
-    const tabId = this.createTab(url || 'about:blank', { background: active === false });
+  openTabForExtension({ requestId, url, active, profileId = 'default' }) {
+    const space = this.spaces.find(s => (s.profileId || 'default') === profileId);
+    if (!space) return;
+    const tabId = this.createTab(url || 'about:blank', { background: active === false, spaceId: space.id, profileId });
     const tab = this.tabs.find(t => t.id === tabId);
     const report = () => {
       const wcId = this.webContentsIdOf(tab);
@@ -70,8 +72,11 @@ export const ExtensionsMixin = {
   },
 
   async refreshExtensions() {
+    const profileId = this.profileForSpace?.() || 'default';
     try {
-      this.installedExtensions = await window.shiiraAPI.extensions.list();
+      const extensions = await window.shiiraAPI.extensions.list(profileId);
+      if (profileId !== (this.profileForSpace?.() || 'default')) return;
+      this.installedExtensions = extensions;
     } catch (error) {
       console.warn('[Extensions] Could not list extensions:', error);
       this.installedExtensions = [];
@@ -86,6 +91,8 @@ export const ExtensionsMixin = {
     const toolbar = this.extensionToolbar;
     if (!toolbar) return;
     const tab = this.tabs.find(t => t.id === this.activeTabId);
+    const partition = this.partitionForProfile?.(this.profileForTab?.(tab) || 'default') || PARTITION;
+    if (toolbar.getAttribute('partition') !== partition) toolbar.setAttribute('partition', partition);
     const wcId = tab && !tab.isHome && !tab.privateMode ? this.webContentsIdOf(tab) : null;
     const visible = this.installedExtensions.length > 0 && wcId !== null;
     toolbar.classList.toggle('hidden', !visible);
@@ -97,6 +104,8 @@ export const ExtensionsMixin = {
   // Called when a tab is shown or its page attaches.
   onActiveTabChanged() {
     this.updateExtensionToolbar();
+    const profileId = this.profileForSpace?.() || 'default';
+    if (this.extensionProfile !== profileId) { this.extensionProfile = profileId; void this.refreshExtensions(); }
   },
 
   showExtensionInstallDialog(prompt) {
@@ -110,7 +119,8 @@ export const ExtensionsMixin = {
       window.shiiraAPI.extensions.decideInstall(prompt.id, false);
       return;
     }
-    document.getElementById('extension-install-title').textContent = `Add “${prompt.name}” to Shiira?`;
+    const profileName = this.profiles?.find(p => p.id === prompt.profileId)?.name || 'Default';
+    document.getElementById('extension-install-title').textContent = `Add “${prompt.name}” to the ${profileName} profile?`;
     const icon = document.getElementById('extension-install-icon');
     if (prompt.icon) {
       icon.src = prompt.icon;
@@ -158,7 +168,7 @@ export const ExtensionsMixin = {
       const row = document.createElement('div');
       row.className = 'extension-row';
       row.innerHTML = `
-        <img class="extension-icon" src="${escapeHtml(iconUrl(extension.id))}" width="24" height="24" alt="">
+        <img class="extension-icon" src="${escapeHtml(iconUrl(extension.id, this.partitionForProfile?.(this.profileForSpace?.() || 'default') || PARTITION))}" width="24" height="24" alt="">
         <span class="extension-text">
           <span class="extension-name">${escapeHtml(extension.name)}</span>
           <span class="extension-meta">${escapeHtml(extension.version)}${extension.description ? ` · ${escapeHtml(extension.description)}` : ''}</span>
@@ -168,7 +178,7 @@ export const ExtensionsMixin = {
       row.querySelector('.extension-remove').addEventListener('click', async () => {
         const ok = await this.showConfirmation(`Remove “${extension.name}”?`, 'Its files and settings are deleted from Shiira.', { confirmText: 'Remove', danger: true });
         if (!ok) return;
-        const result = await window.shiiraAPI.extensions.uninstall(extension.id);
+        const result = await window.shiiraAPI.extensions.uninstall(extension.id, this.profileForSpace?.() || 'default');
         if (status) status.textContent = result?.success ? `${extension.name} was removed.` : (result?.error || 'Could not remove the extension.');
         await this.refreshExtensions();
         this.renderExtensionSettings();

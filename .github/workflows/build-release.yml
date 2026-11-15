@@ -66,6 +66,22 @@ jobs:
         if: runner.os == 'Windows'
         run: npm run test:runtime:electron
 
+      - name: Verify browser migration and Arc workflows on Windows
+        if: runner.os == 'Windows'
+        run: npm run test:orbe:electron
+
+      - name: Verify Little windows, routing and shortcuts on Windows
+        if: runner.os == 'Windows'
+        run: npm run test:orbe-next:electron
+
+      - name: Verify custom player and private media controls on Windows
+        if: runner.os == 'Windows'
+        run: npm run test:youtube:electron
+
+      - name: Verify profiles, shared sidebars and Notes and Easels on Windows
+        if: runner.os == 'Windows'
+        run: npm run test:orbe-shared:electron
+
       - name: Build and publish
         run: npm run ${{ matrix.build-script }} -- --publish always
         env:

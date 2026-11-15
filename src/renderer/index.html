@@ -3,14 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' shiira-asset:; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src * data: blob: 'self' shiira-asset: crx:; frame-src *; child-src *; connect-src 'self';">
   <title>Shiira</title>
+  <style>
+    html, body {
+      margin: 0;
+      background: var(--bg-primary, #020308);
+      color: var(--text-primary, #f2fbff);
+    }
+  </style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link id="shiira-fonts" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&display=swap" rel="preload" as="style">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="sidebar.css">
   <link rel="stylesheet" href="home-search.css">
+  <link rel="stylesheet" href="arc-tools.css">
+  <link rel="stylesheet" href="workspace.css">
 </head>
 <body>
   <div id="app">
@@ -120,7 +130,7 @@
         </div>
         <input type="text" id="url-input" placeholder="Search or enter URL" autocomplete="off" spellcheck="false">
         <div class="url-actions">
-          <div id="ad-counter" class="ad-counter hidden" title="Verified page blocks">
+          <div id="ad-counter" class="ad-counter hidden" title="Requests blocked this session">
             <img src="shiira-asset://ui-icons/shield.svg" alt="" width="12" height="12">
             <span id="ad-counter-value">0</span>
           </div>
@@ -641,8 +651,8 @@
       </div>
       <div class="context-menu-item has-toggle" data-action="adblock">
         <img class="menu-icon" src="../../assets/ui-icons/shield.svg" width="16" height="16" alt="">
-        Ad Blocker
-        <span class="adblock-stats" id="adblock-stats"></span>
+        <span class="menu-item-text">Ad Blocker</span>
+        <span class="adblock-stats" id="adblock-stats" role="status" aria-live="polite"></span>
         <span class="menu-toggle" id="adblock-toggle"></span>
       </div>
       <div class="context-menu-item has-toggle" data-action="shield">
@@ -658,6 +668,10 @@
       <div class="context-menu-item" data-action="settings">
         <img class="menu-icon" src="../../assets/ui-icons/customize.svg" width="16" height="16" alt="">
         Settings
+      </div>
+      <div class="context-menu-item" data-action="import-browsers">
+        <img class="menu-icon" src="../../assets/ui-icons/import.svg" width="16" height="16" alt="">
+        Import Bookmarks
       </div>
       <div class="context-menu-item" data-action="shiira-palettes">
         <img class="menu-icon" src="../../assets/ui-icons/bookmark.svg" width="16" height="16" alt="">
@@ -1148,12 +1162,14 @@
               <div class="settings-group">
                 <h5>Links</h5>
                 <label class="settings-check"><input id="settings-peek" type="checkbox"> Preview links in Peek with Shift+click, or when leaving a pinned tab’s site</label>
+                <label class="settings-check"><input id="settings-auto-pip" type="checkbox" checked> Automatically show playing video in picture-in-picture when switching tabs</label>
                 <p>Peek opens a page over the one you are on. Keep it as a tab, put it in split view, or press Esc.</p>
               </div>
               <div class="settings-group">
                 <h5>Moving from Arc</h5>
                 <p>Bring over Arc's spaces, pinned tabs, folders and favorites. Arc's files are only read, never changed.</p>
                 <button id="settings-import-arc" type="button" class="settings-action">Import from Arc…</button>
+                <button id="settings-import-browsers" type="button" class="settings-action">Import bookmarks from another browser…</button>
               </div>
               <div class="settings-group">
                 <h5>Browsing</h5>
@@ -1297,6 +1313,7 @@
         </div>
         <div class="setup-step hidden" data-setup-step="3">
           <h1>Ready to browse</h1>
+          <button id="setup-import-browsers" type="button" class="settings-action">Bring bookmarks from another browser…</button>
           <p>Open Settings from the menu whenever you want to change your theme, search engine, or privacy controls.</p>
           <div class="setup-shortcuts"><span>New tab <kbd>Ctrl+T</kbd></span><span>Address bar <kbd>Ctrl+L</kbd></span></div>
         </div>

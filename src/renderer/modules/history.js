@@ -8,6 +8,7 @@ import { escapeHtml } from './utils.js';
  * Adds history functionality to ShiiraBrowser
  */
 export const HistoryMixin = {
+  profileHistory() { return this.browsingHistory.filter(item => (item.profileId || 'default') === (this.profileForSpace?.() || 'default')); },
   /**
    * Load browsing history from storage
    */
@@ -45,11 +46,11 @@ export const HistoryMixin = {
    * @param {string} title - Page title
    * @param {string} favicon - Favicon URL
    */
-  addToHistory(url, title, favicon) {
+  addToHistory(url, title, favicon, profileId = this.profileForSpace?.() || 'default') {
     // Don't add duplicates of the last entry
     if (this.browsingHistory.length > 0) {
       const last = this.browsingHistory[this.browsingHistory.length - 1];
-      if (last.url === url) {
+      if (last.url === url && (last.profileId || 'default') === profileId) {
         // Update title and favicon if they changed
         if (title && title !== 'New Tab') last.title = title;
         if (favicon) last.favicon = favicon;
@@ -61,6 +62,7 @@ export const HistoryMixin = {
     console.log('Adding to history:', url, title);
     
     this.browsingHistory.push({
+      profileId,
       url,
       title: title || url,
       favicon: favicon || null,
@@ -101,7 +103,7 @@ export const HistoryMixin = {
    */
   renderHistoryList(filter = '') {
     // Reverse to show newest first
-    let items = [...this.browsingHistory].reverse();
+    let items = [...this.profileHistory()].reverse();
     
     if (filter) {
       items = items.filter(item => 
@@ -209,7 +211,8 @@ export const HistoryMixin = {
    * @param {string} url - URL to remove
    */
   removeFromHistory(url) {
-    this.browsingHistory = this.browsingHistory.filter(item => item.url !== url);
+    const profileId = this.profileForSpace?.() || 'default';
+    this.browsingHistory = this.browsingHistory.filter(item => item.url !== url || (item.profileId || 'default') !== profileId);
     this.saveBrowsingHistory();
     this.filterHistory();
   },
@@ -235,12 +238,13 @@ export const HistoryMixin = {
   async clearHistory() {
     const confirmed = await this.showConfirmation(
       'Clear All History',
-      'Are you sure you want to clear all browsing history?\n\nThis action cannot be undone!',
+      'Clear browsing history for this browser profile?\n\nThis action cannot be undone!',
       { danger: true, confirmText: 'Clear All' }
     );
     
     if (confirmed) {
-      this.browsingHistory = [];
+      const profileId = this.profileForSpace?.() || 'default';
+      this.browsingHistory = this.browsingHistory.filter(item => (item.profileId || 'default') !== profileId);
       this.saveBrowsingHistory();
       this.renderHistoryList();
       await this.showSuccess('Browsing history has been cleared.');

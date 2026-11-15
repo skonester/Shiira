@@ -335,7 +335,7 @@ export const PasswordManagerMixin = {
     const password = this._passwords.find(p => p.id === id);
     if (password) {
       try {
-        await navigator.clipboard.writeText(password.password);
+        await window.shiiraAPI.clipboard.writeText(password.password);
         
         // Show feedback
         const btn = this.passwordList.querySelector(`.password-action-btn.copy[data-id="${id}"]`);
@@ -858,6 +858,9 @@ export const PasswordManagerMixin = {
    * @param {string} url - The URL of the page
    */
   async injectPasswordAutofill(webview, url) {
+    // Password Anvil is an app-wide vault. Do not inject its default-profile
+    // credentials into a separate browser identity or private session.
+    if (webview.getAttribute('partition') !== 'persist:main') return;
     console.log('[Password] injectPasswordAutofill called for:', url);
     
     // Skip internal pages

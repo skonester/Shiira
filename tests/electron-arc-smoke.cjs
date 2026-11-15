@@ -43,7 +43,8 @@ const deadline = setTimeout(() => finish(new Error('Electron smoke test timed ou
 function finish(error, details = {}) {
   clearTimeout(deadline);
   fs.writeFileSync(path.join(artifacts, 'result.json'), JSON.stringify({ success: !error, error: error?.stack, temporaryProfile: root, versions: process.versions, ...details }, null, 2));
-  BrowserWindow.getAllWindows().forEach(win => win.destroy());
+  // app.exit closes test windows without triggering the splash's user-close
+  // handler and a nested graceful quit while the UI is still starting.
   app.exit(error ? 1 : 0);
 }
 
@@ -51,7 +52,7 @@ app.whenReady().then(async () => {
   try {
     let win;
     for (let attempt = 0; attempt < 120; attempt++) {
-      win = BrowserWindow.getAllWindows()[0];
+      win = BrowserWindow.getAllWindows().find(window => window.webContents.getLastWebPreferences().webviewTag);
       if (win && await win.webContents.executeJavaScript('Boolean(window.ShiiraBrowser?.spacesLoaded)').catch(() => false)) break;
       await delay(200);
     }

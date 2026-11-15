@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'">
+  <title>Shiira</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #020308; color: #9fb4c1; }
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 26px;
+      font: 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      user-select: none;
+      -webkit-app-region: drag;
+    }
+    img { width: 148px; height: auto; -webkit-user-drag: none; }
+    .status { display: flex; align-items: center; gap: 10px; }
+    .spinner {
+      width: 12px;
+      height: 12px;
+      border: 2px solid #19243b;
+      border-top-color: #28d7ef;
+      border-right-color: #b85cff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+  </style>
+</head>
+<body>
+  <img src="../../assets/shiira.png" width="148" height="144" alt="Shiira logo">
+  <div class="status" role="status"><span class="spinner" aria-hidden="true"></span>Starting Shiira…</div>
+</body>
+</html>

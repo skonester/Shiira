@@ -5,6 +5,7 @@
 // Tab rows are the same elements in both layouts; this module only moves them to the right container.
 
 import { escapeHtml } from './utils.js';
+import { cleanUrl, mdLink, spaceBookmarksHtml } from './page-tools-model.js';
 import {
   uid, defaultSpace, DEFAULT_SPACE_ID, SPACE_COLORS, SPACE_ICONS,
   siblings, insertAt, isInsideFolder, folderTree, visibleOrder,
@@ -54,8 +55,8 @@ export const SidebarMixin = {
     this.activeBySpace = {};
     this.archive = [];
     this.spacesLoaded = false;
-    this.spacesReadOnly = false;
-    this.layout = localStorage.getItem(KEYS.layout) === 'tabs' ? 'tabs' : 'sidebar';
+    this.spacesReadOnly = this.isLittle === true;
+    this.layout = !this.isLittle && localStorage.getItem(KEYS.layout) === 'tabs' ? 'tabs' : 'sidebar';
     this.sidebarWidth = clamp(readNumber(KEYS.width, DEFAULT_WIDTH), MIN_WIDTH, MAX_WIDTH);
     this.sidebarCollapsed = localStorage.getItem(KEYS.collapsed) === 'true';
 
@@ -217,12 +218,23 @@ export const SidebarMixin = {
   },
 
   // Puts every tab row in the container it belongs to for the current space and layout.
+  withSidebarBatch(callback) {
+    const previous = this.sidebarBatch;
+    this.sidebarBatch = true;
+    try { return callback(); }
+    finally {
+      this.sidebarBatch = previous;
+      if (!previous) this.placeTabElements();
+    }
+  },
+
   placeTabElements() {
+    if (this.sidebarBatch) return;
     if (!this.sidebar || !this.tabsContainer) return;
     const spaceId = this.focusedSpaceId;
     const sidebarMode = this.layout === 'sidebar';
     const live = this.tabs.filter(t => t.element);
-    const favorites = siblings(live, [], { section: 'favorites', spaceId }).map(e => e.ref);
+    const favorites = siblings(live.filter(t => this.favoriteVisible?.(t, spaceId) !== false), [], { section: 'favorites', spaceId }).map(e => e.ref);
     const today = siblings(live, [], { section: 'today', spaceId }).map(e => e.ref);
     const shown = new Set();
 
@@ -240,7 +252,7 @@ export const SidebarMixin = {
       today.forEach(t => shown.add(t.id));
       this.tabsContainer.replaceChildren();
     } else {
-      const strip = visibleOrder(live, this.sidebarFolders, spaceId);
+      const strip = visibleOrder(live.filter(t => this.favoriteVisible?.(t, spaceId) !== false), this.sidebarFolders, spaceId);
       this.tabsContainer.replaceChildren(...strip.map(t => t.element));
       strip.forEach(t => shown.add(t.id));
       this.sbFavorites.replaceChildren();
@@ -361,7 +373,7 @@ export const SidebarMixin = {
   },
 
   getVisibleTabOrder() {
-    return visibleOrder(this.tabs, this.sidebarFolders, this.focusedSpaceId)
+    return visibleOrder(this.tabs.filter(t => this.favoriteVisible?.(t) !== false), this.sidebarFolders, this.focusedSpaceId)
       .filter(t => !t.element?.classList.contains('closing'));
   },
 
@@ -412,9 +424,10 @@ export const SidebarMixin = {
     this.focusSpace(ordered[(index + step + ordered.length) % ordered.length].id);
   },
 
-  createSpace({ title, icon, color }) {
+  createSpace({ title, icon, color, profileId = 'default' }) {
     const space = {
       id: uid('s-'),
+      profileId,
       title: (title || 'New Space').slice(0, 60),
       icon: icon || SPACE_ICONS[this.spaces.length % SPACE_ICONS.length],
       color: color || SPACE_COLORS[this.spaces.length % SPACE_COLORS.length],
@@ -500,6 +513,7 @@ export const SidebarMixin = {
     }
     const list = siblings(this.tabs, this.sidebarFolders, { section, spaceId: tab.spaceId, parentId: tab.parentId });
     insertAt(list, { kind: 'tab', id: tab.id, ref: tab }, index);
+    if (this.profileForTab?.(tab) !== tab.profileId) this.resetTabProfile?.(tab);
     if (tab.webview) this.injectLinkRouting?.(tab.webview, this.currentTabUrl(tab));
   },
 
@@ -598,10 +612,11 @@ export const SidebarMixin = {
     this.closeTab(tabId);
   },
 
-  copyTabUrl(tabId = this.activeTabId) {
-    const url = this.currentTabUrl(this.tabs.find(t => t.id === tabId));
+  copyTabUrl(tabId = this.activeTabId, { markdown = false } = {}) {
+    const tab = this.tabs.find(t => t.id === tabId);
+    const url = cleanUrl(this.currentTabUrl(tab));
     if (!url) return;
-    navigator.clipboard.writeText(url)
+    return window.shiiraAPI.clipboard.writeText(markdown ? mdLink(tab?.customTitle || tab?.title, url) : url)
       .then(() => this.setStatus?.('Link copied', 1500))
       .catch(() => this.setStatus?.('Could not copy the link', 2000));
   },
@@ -813,7 +828,8 @@ export const SidebarMixin = {
       const item = document.createElement('div');
       item.className = 'context-menu-item' + (entry.danger ? ' sb-menu-danger' : '') + (entry.disabled ? ' disabled' : '');
       item.setAttribute('role', 'menuitem');
-      item.innerHTML = `<span class="sb-menu-label">${escapeHtml(entry.label)}</span>${entry.hint ? `<span class="sb-menu-hint">${escapeHtml(entry.hint)}</span>` : ''}`;
+      const hint = entry.hint && this.shortcutHint ? this.shortcutHint(entry.hint) : entry.hint;
+      item.innerHTML = `<span class="sb-menu-label">${escapeHtml(entry.label)}</span>${hint ? `<span class="sb-menu-hint">${escapeHtml(hint)}</span>` : ''}`;
       if (!entry.disabled) {
         item.addEventListener('click', () => {
           this.hideSidebarMenu();
@@ -902,6 +918,7 @@ export const SidebarMixin = {
       { label: 'Edit Space…', action: () => this.openSpaceEditor('edit', spaceId) },
       { label: 'New Space…', action: () => this.openSpaceEditor('new') },
       { label: 'New Folder…', action: () => this.createSidebarFolder() },
+      { label: 'Export Space as Bookmarks…', action: () => this.exportSpaceBookmarks(spaceId) },
       { separator: true },
       index > 0 && { label: 'Move Space Left', action: () => this.moveSpace(spaceId, -1) },
       index < ordered.length - 1 && { label: 'Move Space Right', action: () => this.moveSpace(spaceId, 1) },
@@ -931,6 +948,7 @@ export const SidebarMixin = {
       { separator: true },
       { label: 'Archived Tabs', hint: 'Ctrl+Shift+A', action: () => this.showArchivePanel() },
       { label: 'Import from Arc…', action: () => this.importFromArc() },
+      { label: 'Import Bookmarks…', action: () => this.showBrowserImport() },
       { separator: true },
       { label: 'Hide Sidebar', hint: 'Ctrl+S', action: () => this.toggleSidebar() },
       { label: 'Use Top Tabs Layout', action: () => this.setLayout('tabs') }
@@ -938,6 +956,14 @@ export const SidebarMixin = {
   },
 
   // ---------- Sleep and archive ----------
+
+  async exportSpaceBookmarks(spaceId = this.focusedSpaceId) {
+    const space = this.spaces.find(s => s.id === spaceId);
+    if (!space) return;
+    const result = await window.shiiraAPI.pageTools.exportBookmarks(space.title, spaceBookmarksHtml(space, this.tabs, this.sidebarFolders));
+    if (result?.error) this.showError?.(result.error, 'Export failed');
+    else if (!result?.canceled) this.setStatus?.('Space exported as bookmarks', 2000);
+  },
 
   getArchiveHours() {
     return readNumber(KEYS.archiveHours, 12);
@@ -961,6 +987,8 @@ export const SidebarMixin = {
     }
     tab.webview.remove();
     tab.webview = null;
+    tab.mediaState = null;
+    tab.autoPictureInPicture = false;
     tab.isPlayingAudio = false;
     tab.adsBlocked = 0;
     this.updateTabAudioIcon(tab.id);
@@ -968,6 +996,7 @@ export const SidebarMixin = {
     if (url) tab.url = url;
     tab.element.classList.remove('loading');
     tab.element.classList.add('tab-suspended');
+    this.renderMiniPlayers?.();
     return true;
   },
 
@@ -983,7 +1012,10 @@ export const SidebarMixin = {
     this.saveSpacesSoon();
   },
 
-  runTabMaintenance() {
+  async runTabMaintenance() {
+    if (this.tabMaintenanceRunning) return;
+    this.tabMaintenanceRunning = true;
+    try {
     const now = Date.now();
     const activeIds = [this.activeTabId, ...(this.splitPair || [])].filter(Boolean);
     const hours = this.getArchiveHours();
@@ -991,14 +1023,27 @@ export const SidebarMixin = {
     let archived = 0;
     for (const tab of [...this.tabs]) {
       if (tab.element?.classList.contains('closing')) continue;
-      if (shouldArchive(tab, { now, hours, activeIds })) {
+      const archive = shouldArchive(tab, { now, hours, activeIds });
+      const sleep = shouldSleep(tab, { now, minutes, activeIds });
+      if ((archive || sleep) && tab.webview) {
+        let safe = false;
+        try { safe = await window.shiiraAPI.pageTools.canSleep(tab.webview.getWebContentsId()); } catch {}
+        if (!safe) continue;
+        // The IPC response can arrive after the user focuses or edits this tab.
+        const currentIds = [this.activeTabId, ...(this.splitPair || [])];
+        if (currentIds.includes(tab.id) || !this.tabs.includes(tab)) continue;
+        if (archive && !shouldArchive(tab, { now: Date.now(), hours, activeIds: currentIds })) continue;
+        if (sleep && !archive && !shouldSleep(tab, { now: Date.now(), minutes, activeIds: currentIds })) continue;
+      }
+      if (archive) {
         this.archiveTab(tab.id);
         archived++;
-      } else if (shouldSleep(tab, { now, minutes, activeIds })) {
+      } else if (sleep) {
         this.sleepTab(tab);
       }
     }
     if (archived) this.setStatus?.(`${archived} idle tab${archived === 1 ? '' : 's'} moved to the archive`, 3000);
+    } finally { this.tabMaintenanceRunning = false; }
   },
 
   archiveTab(tabId) {
@@ -1007,7 +1052,7 @@ export const SidebarMixin = {
     const url = this.currentTabUrl(tab);
     if (url && !tab.privateMode && /^(https?|file):/i.test(url)) {
       this.archive = this.archive.filter(entry => entry.url !== url);
-      this.archive.unshift({ url, title: tab.customTitle || tab.title || url, favicon: tab.favicon || null, spaceId: tab.spaceId, archivedAt: Date.now() });
+      this.archive.unshift({ url, title: tab.customTitle || tab.title || url, favicon: tab.favicon || null, spaceId: tab.spaceId, profileId: this.profileForTab?.(tab) || 'default', archivedAt: Date.now() });
       this.archive.length = Math.min(this.archive.length, MAX_ARCHIVE);
     }
     this.closeTab(tabId, true);
@@ -1031,7 +1076,7 @@ export const SidebarMixin = {
       if (!this.archive.length) return;
       const ok = await this.showConfirmation('Clear the archive?', `${this.archive.length} archived tab${this.archive.length === 1 ? '' : 's'} will be forgotten.`, { confirmText: 'Clear Archive', danger: true });
       if (!ok) return;
-      this.archive = [];
+      this.archive = this.archive.filter(e => (e.profileId || this.profileForSpace(e.spaceId)) !== this.profileForSpace());
       this.renderArchive();
       this.saveSpacesSoon();
     });
@@ -1059,6 +1104,7 @@ export const SidebarMixin = {
     const query = (this.archiveSearch?.value || '').trim().toLowerCase();
     const entries = this.archive
       .map((entry, index) => ({ entry, index }))
+      .filter(({ entry }) => (entry.profileId || this.profileForSpace(entry.spaceId)) === this.profileForSpace())
       .filter(({ entry }) => !query || `${entry.title} ${entry.url}`.toLowerCase().includes(query));
     const hours = this.getArchiveHours();
     document.getElementById('archive-note').textContent = hours > 0
@@ -1096,8 +1142,10 @@ export const SidebarMixin = {
   restoreArchived(index) {
     const entry = this.archive[index];
     if (!entry) return;
+    const space = this.spaceForProfile(entry.profileId || this.profileForSpace(entry.spaceId), entry.spaceId);
+    if (!space) { this.setStatus?.('Create a Space for this browser profile before restoring its archive.', 3000); return; }
     this.archive.splice(index, 1);
-    const spaceId = this.spaces.some(s => s.id === entry.spaceId) ? entry.spaceId : this.focusedSpaceId;
+    const spaceId = space.id;
     this.hideArchivePanel();
     this.createTab(entry.url, { spaceId, title: entry.title, favicon: entry.favicon });
     this.saveSpacesSoon();
@@ -1166,6 +1214,7 @@ export const SidebarMixin = {
     document.getElementById('space-editor-save').textContent = space ? 'Save' : 'Create Space';
     document.getElementById('space-editor-delete').classList.toggle('hidden', !space || this.spaces.length === 1);
     document.getElementById('space-name').value = this.spaceEditorState.title;
+    if (document.getElementById('space-profile')) document.getElementById('space-profile').value = space?.profileId || this.profileForSpace();
     document.getElementById('space-icon-custom').value = '';
     this.setSpaceEditorValue({});
     this.spaceEditor.classList.remove('hidden');
@@ -1187,14 +1236,16 @@ export const SidebarMixin = {
     }
   },
 
-  saveSpaceEditor() {
+  async saveSpaceEditor() {
     const state = this.spaceEditorState;
     if (!state) return;
     const title = document.getElementById('space-name').value.trim() || (state.mode === 'new' ? 'New Space' : 'Space');
     const color = /^#[0-9a-f]{6}$/i.test(state.color) ? state.color.toLowerCase() : SPACE_COLORS[0];
+    const profileId = document.getElementById('space-profile')?.value || 'default';
+    if (state.mode === 'edit' && !await this.changeSpaceProfile(state.spaceId, profileId)) return;
     this.hideSpaceEditor();
     if (state.mode === 'edit') this.updateSpace(state.spaceId, { title: title.slice(0, 60), icon: state.icon, color });
-    else this.createSpace({ title, icon: state.icon, color });
+    else this.createSpace({ title, icon: state.icon, color, profileId });
   },
 
   hideSpaceEditor() {
@@ -1213,18 +1264,19 @@ export const SidebarMixin = {
     return {
       version: 1,
       focusedSpaceId: this.focusedSpaceId,
-      spaces: this.spaces.map(({ id, title, icon, color, position }) => ({ id, title, icon, color, position })),
+      spaces: this.spaces.map(({ id, title, icon, color, position, profileId }) => ({ id, title, icon, color, position, profileId: profileId || 'default' })),
       folders: this.sidebarFolders.map(({ id, spaceId, parentId, title, collapsed, position }) => ({ id, spaceId, parentId: parentId || null, title, collapsed: Boolean(collapsed), position })),
       items: keepers.map(t => ({
         id: t.itemId,
+        profileId: this.profileForTab?.(t) || 'default',
         spaceId: t.spaceId,
         section: t.section,
         parentId: t.parentId || null,
-        url: this.currentTabUrl(t) || t.pinnedUrl,
+        url: t.pinnedUrl || this.currentTabUrl(t),
         pinnedUrl: t.pinnedUrl,
-        title: t.title,
+        title: t.sharedTitle ?? t.title,
         customTitle: t.customTitle || '',
-        favicon: t.favicon || null,
+        favicon: t.sharedFavicon ?? t.favicon ?? null,
         position: t.position
       })),
       archive: this.archive,
@@ -1233,6 +1285,7 @@ export const SidebarMixin = {
   },
 
   saveSpacesSoon() {
+    if (this.sidebarBatch) return;
     if (!this.spacesLoaded || this.spacesReadOnly) return;
     clearTimeout(this.saveSpacesTimer);
     this.saveSpacesTimer = setTimeout(() => void this.saveSpacesNow(), 500);
@@ -1241,24 +1294,33 @@ export const SidebarMixin = {
   async saveSpacesNow() {
     if (!this.spacesLoaded || this.spacesReadOnly) return;
     clearTimeout(this.saveSpacesTimer);
+    if (this.spacesSaving) { await this.spacesSaving; return this.saveSpacesNow(); }
+    const sent = this.serializeSpaces();
     try {
-      const result = await window.shiiraAPI.spaces.save(this.serializeSpaces());
+      this.spacesSaving = window.shiiraAPI.spaces.save(sent, this.spacesRevision || 0);
+      const result = await this.spacesSaving;
+      if (result?.success && result.doc) {
+        // Rebase edits made while the save was in flight before applying peers.
+        this.spacesBase = sent;
+        this.receiveSharedSpaces(result.doc);
+      }
       if (!result?.success) console.warn('[Spaces] Save failed:', result?.error);
       return result;
     } catch (error) {
       console.error('[Spaces] Save failed:', error);
       return { success: false, error: error.message };
+    } finally {
+      this.spacesSaving = null;
+      if (this.pendingSharedSpaces) { const remote = this.pendingSharedSpaces; this.pendingSharedSpaces = null; this.receiveSharedSpaces(remote); }
     }
   },
 
   // Loads spaces, folders, pinned tabs and favorites. Pinned tabs and favorites start asleep.
   async loadSpaces() {
+    await this.loadProfiles();
     let doc = null;
     try {
-      // Only the first window owns the saved sidebar, so two windows never overwrite each other.
-      const windows = await window.shiiraAPI.session.getWindowCount();
-      if (windows > 1) this.spacesReadOnly = true;
-      else doc = await window.shiiraAPI.spaces.load();
+      doc = await window.shiiraAPI.spaces.load();
     } catch (error) {
       console.error('[Spaces] Load failed:', error);
     }
@@ -1272,28 +1334,33 @@ export const SidebarMixin = {
       // Tabs opened before the sidebar loaded (a link from another app) join the saved space.
       this.tabs.forEach(t => { if (t.spaceId && !known.has(t.spaceId)) t.spaceId = focused; });
       this.focusedSpaceId = focused;
-      for (const item of sortByPosition(doc.items || [])) {
-        this.createTab(item.url, {
-          deferLoad: true,
-          title: item.title || hostOf(item.url) || item.url,
-          favicon: item.favicon,
-          section: item.section,
-          spaceId: item.spaceId,
-          parentId: item.parentId,
-          position: item.position,
-          itemId: item.id,
-          customTitle: item.customTitle,
-          pinnedUrl: item.pinnedUrl
-        });
-      }
+      this.withSidebarBatch(() => {
+        for (const item of sortByPosition(doc.items || [])) {
+          this.createTab(item.url, {
+            deferLoad: true,
+            title: item.title || hostOf(item.url) || item.url,
+            favicon: item.favicon,
+            section: item.section,
+            profileId: item.profileId,
+            spaceId: item.spaceId,
+            parentId: item.parentId,
+            position: item.position,
+            itemId: item.id,
+            customTitle: item.customTitle,
+            pinnedUrl: item.pinnedUrl
+          });
+        }
+      });
       this.savedActiveItems = doc.activeBySpace || {};
     }
     this.spacesLoaded = true;
+    this.initSidebarSync(doc);
     this.applyLayout();
   },
 
   // After startup restore: show the tab that was on screen, or a fresh home tab.
   activateInitialTab({ legacyActiveItemId = null } = {}) {
+    if (this.isLittle) { if (!this.activeTabId) this.createHomeTab(); return; }
     const visible = this.getVisibleTabOrder();
     const wanted = this.savedActiveItems?.[this.focusedSpaceId] || legacyActiveItemId;
     const remembered = wanted && visible.find(t => t.itemId === wanted);
@@ -1311,7 +1378,7 @@ export const SidebarMixin = {
   async importFromArc() {
     if (this.arcImportRunning) return;
     if (this.spacesReadOnly) {
-      this.showError?.('Import Arc data in the first Shiira window so it can be saved.', 'Arc import');
+      this.showError?.('Open a full Shiira window to import Arc data.', 'Arc import');
       return;
     }
     this.arcImportRunning = true;
@@ -1333,7 +1400,7 @@ export const SidebarMixin = {
     const s = found.summary;
     const ok = await this.showConfirmation(
       'Import from Arc',
-      `Found ${s.spaces} spaces, ${s.pinned} pinned tabs, ${s.folders} folders, ${s.favorites} favorites and ${s.archive} archived tabs from ${s.profiles} Arc profiles.\n\nFavorites from all profiles will join Shiira's shared favorites. Spaces share cookies and logins in Shiira. Passwords, cookies, extensions, Boosts and Easels are not imported. Arc's files are only read.`,
+      `Found ${s.spaces} spaces, ${s.pinned} pinned tabs, ${s.folders} folders, ${s.favorites} favorites and ${s.archive} archived tabs from ${s.profiles} Arc profiles.\n\nImported Spaces and favorites use Shiira's Default profile. You can assign different profiles in the Space editor afterwards. Passwords, cookies, extensions, Boosts and Easels are not imported. Arc's files are only read.`,
       { confirmText: 'Import' }
     );
     if (!ok) return;
@@ -1373,21 +1440,23 @@ export const SidebarMixin = {
     }
     this.spaces.push(...spaces);
     this.sidebarFolders.push(...folders);
-    for (const tab of tabs) {
-      this.createTab(tab.url, {
-        deferLoad: true,
-        title: tab.title || hostOf(tab.url),
-        section: tab.section,
-        spaceId: tab.spaceId,
-        parentId: tab.parentId,
-        position: tab.position,
-        itemId: tab.itemId,
-        customTitle: tab.customTitle,
-        pinnedUrl: tab.pinnedUrl,
-        favicon: tab.favicon,
-        lastActiveAt: tab.lastActiveAt
-      });
-    }
+    this.withSidebarBatch(() => {
+      for (const tab of tabs) {
+        this.createTab(tab.url, {
+          deferLoad: true,
+          title: tab.title || hostOf(tab.url),
+          section: tab.section,
+          spaceId: tab.spaceId,
+          parentId: tab.parentId,
+          position: tab.position,
+          itemId: tab.itemId,
+          customTitle: tab.customTitle,
+          pinnedUrl: tab.pinnedUrl,
+          favicon: tab.favicon,
+          lastActiveAt: tab.lastActiveAt
+        });
+      }
+    });
     this.archive = [...this.archive, ...archive].sort((a, b) => b.archivedAt - a.archivedAt).slice(0, MAX_ARCHIVE);
     this.browsingHistory = mergeImportedHistory(this.browsingHistory || [], plan.history || []);
     this.saveBrowsingHistory?.();

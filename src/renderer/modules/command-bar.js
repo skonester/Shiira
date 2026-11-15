@@ -139,6 +139,12 @@ export const CommandBarMixin = {
     const active = this.tabs.find(t => t.id === this.activeTabId);
     const space = this.getFocusedSpace?.();
     const actions = [
+      { label: 'Notes and Easels', keywords: 'notes canvas notebook documents easel', run: () => this.showWorkspace() },
+      { label: 'New Note', keywords: 'write text checklist note', run: () => this.showWorkspace('note') },
+      { label: 'New Easel', keywords: 'canvas draw capture image sticky board', run: () => this.showWorkspace('easel') },
+      { label: 'New Little Shiira Window', keywords: 'little arc mini quick window', hint: 'Ctrl+Alt+N', run: () => this.openLittleWindow() },
+      { label: 'External Link Routing…', keywords: 'air traffic control route external links little space', run: () => this.showSettings('links') },
+      { label: 'Keyboard Shortcuts…', keywords: 'keys keyboard shortcuts remap record', run: () => this.showSettings('shortcuts') },
       { label: 'New Space…', keywords: 'create add space', hint: '', run: () => this.openSpaceEditor('new') },
       space && { label: `Edit Space “${space.title}”…`, keywords: 'rename colour color icon emoji space theme', run: () => this.openSpaceEditor('edit', space.id) },
       this.layout === 'sidebar' && { label: this.sidebarCollapsed ? 'Show Sidebar' : 'Hide Sidebar', keywords: 'toggle sidebar collapse', hint: 'Ctrl+S', run: () => this.toggleSidebar() },
@@ -148,6 +154,19 @@ export const CommandBarMixin = {
       active && active.section === 'pinned' && { label: 'Unpin Tab', keywords: 'unpin', hint: 'Ctrl+D', run: () => this.togglePin(active.id) },
       active && active.section !== 'favorites' && this.canPin?.(active) && { label: 'Add Tab to Favorites', keywords: 'favorite favourite star', run: () => this.toggleFavorite(active.id) },
       active && !active.isHome && { label: 'Copy Link', keywords: 'copy url address', hint: 'Ctrl+Shift+C', run: () => this.copyTabUrl(active.id) },
+      active && !active.isHome && { label: 'Copy Link as Markdown', keywords: 'copy markdown clean link', hint: 'Ctrl+Alt+Shift+C', run: () => this.copyTabUrl(active.id, { markdown: true }) },
+      active?.webview && { label: 'Capture an Area to Clipboard', keywords: 'screenshot capture image area', hint: 'Ctrl+Shift+2', run: () => this.startAreaCapture() },
+      active?.webview && { label: 'Save Visible Page Capture…', keywords: 'screenshot capture image visible png', run: () => this.capturePage('visible') },
+      active?.webview && { label: 'Save Full Page Capture…', keywords: 'screenshot capture image full entire png', run: () => this.capturePage('full') },
+      active?.webview && !active.privateMode && { label: 'Boost This Site…', keywords: 'boost css customize zap hide element', run: () => this.showBoosts() },
+      active?.webview && { label: this.isDeveloperMode?.() ? 'Turn Developer Mode Off' : 'Turn Developer Mode On', keywords: 'developer localhost toolbar url', run: () => this.toggleDeveloperMode() },
+      active?.webview && { label: 'Open Page Developer Tools', keywords: 'developer devtools inspect console', hint: 'Ctrl+Shift+I', run: () => this.togglePageDevTools() },
+      active?.webview && { label: 'Toggle Automatic Picture-in-Picture for This Site', keywords: 'video pip picture automatic', run: () => this.toggleSiteAutoPip() },
+      this.splitPair?.length < 4 && { label: 'Add Page to Split View', keywords: 'add pane third fourth split', run: () => this.addNextSplitPane() },
+      this.splitPair && { label: 'Arrange Split Pages Side by Side', keywords: 'split horizontal columns', run: () => this.setSplitLayout('columns') },
+      this.splitPair && { label: 'Stack Split Pages Vertically', keywords: 'split vertical rows stacked', run: () => this.setSplitLayout('rows') },
+      this.splitPair?.length > 2 && { label: 'Arrange Split Pages in a Grid', keywords: 'split grid panes', run: () => this.setSplitLayout('grid') },
+      space && { label: 'Export Space as Bookmarks…', keywords: 'export share space bookmarks html', run: () => this.exportSpaceBookmarks(space.id) },
       { label: 'New Folder…', keywords: 'folder group pinned', run: () => this.createSidebarFolder() },
       { label: 'Clear Today Tabs', keywords: 'clear close archive today', run: () => this.clearTodayTabs() },
       { label: 'Archived Tabs', keywords: 'archive old closed', hint: 'Ctrl+Shift+A', run: () => this.showArchivePanel() },
@@ -158,10 +177,11 @@ export const CommandBarMixin = {
       { label: 'Toggle Bookmarks Bar', keywords: 'bookmarks bar', hint: 'Ctrl+Shift+B', run: () => this.toggleBookmarksBar() },
       { label: 'Passwords', keywords: 'password anvil logins', run: () => this.showPasswordAnvil?.() },
       { label: 'Import from Arc…', keywords: 'arc import migrate move spaces', run: () => this.importFromArc() },
+      { label: 'Import Bookmarks from Another Browser…', keywords: 'import migrate chrome edge brave firefox safari vivaldi opera html bookmarks', run: () => this.showBrowserImport() },
       { label: 'Themes', keywords: 'theme colour color look appearance', run: () => this.showThemesModal?.() },
       { label: 'Settings', keywords: 'settings preferences options', hint: 'Ctrl+,', run: () => this.showSettings() }
     ];
-    return actions.filter(Boolean).map(action => ({ ...action, type: 'action' }));
+    return actions.filter(Boolean).map(action => ({ ...action, hint: action.hint && this.shortcutHint ? this.shortcutHint(action.hint) : action.hint, type: 'action' }));
   },
 
   buildCommandItems() {
@@ -207,10 +227,15 @@ export const CommandBarMixin = {
 
     // Archived tabs remain discoverable after their page closes.
     (this.archive || [])
+      .filter(entry => (entry.profileId || 'default') === (this.profileForSpace?.() || 'default'))
       .filter(entry => matches(query, entry.title, entry.url))
       .slice(0, 3)
       .forEach(entry => items.push({ type: 'archive', label: entry.title || entry.url, subtitle: `Archived · ${hostOf(entry.url)}`, url: entry.url, favicon: entry.favicon,
-        run: (opts) => this.openFromCommandBar(entry.url, { ...opts, spaceId: entry.spaceId }) }));
+        run: (opts) => {
+          const space = this.spaceForProfile ? this.spaceForProfile(entry.profileId || 'default', entry.spaceId) : { id: entry.spaceId };
+          if (!space) { this.setStatus?.('Create a Space for this browser profile before restoring its archive.', 3000); return; }
+          return this.openFromCommandBar(entry.url, { ...opts, spaceId: space.id });
+        } }));
 
     // Spaces.
     sortByPosition(this.spaces || [])

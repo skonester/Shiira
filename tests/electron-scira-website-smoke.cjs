@@ -42,7 +42,6 @@ function finish(error) {
     success: !error, error: error?.stack, temporaryProfile: root, liveWebsiteAssets: live,
     searchRequestsCanceled: true, realApiKeysUsed: false, apiFixtureRequests: apiRequests, requests
   }, null, 2));
-  BrowserWindow.getAllWindows().forEach(win => win.destroy());
   app.exit(error ? 1 : 0);
 }
 process.on('unhandledRejection', finish);
@@ -114,7 +113,7 @@ app.whenReady().then(async () => {
   try {
     let win;
     await waitFor(async () => {
-      win = BrowserWindow.getAllWindows()[0];
+      win = BrowserWindow.getAllWindows().find(window => window.webContents.getLastWebPreferences().webviewTag);
       return win && win.webContents.executeJavaScript('Boolean(window.ShiiraBrowser?.spacesLoaded)').catch(() => false);
     }, 'Shiira startup');
     installWebsite(session.fromPartition('persist:main'));

@@ -2,12 +2,14 @@
 // Both are Arc features, also in Solamar (https://github.com/Bambeek/solamar, GPL-3.0-or-later).
 
 const PEEK_KEY = 'shiira-peek-links';
+import { splitRects } from './split-layout.js';
 const WEBVIEW_PREFERENCES = 'contextIsolation=yes,devTools=no,plugins=yes,backgroundThrottling=no';
 
 export const SplitPeekMixin = {
   initSplitView() {
     this.splitPair = null;
     this.splitRatio = 0.5;
+    this.splitLayout = 'columns';
     this.splitDivider = document.getElementById('split-divider');
     const divider = this.splitDivider;
     if (!divider) return;
@@ -20,8 +22,10 @@ export const SplitPeekMixin = {
     divider.addEventListener('pointermove', (event) => {
       if (!divider.hasPointerCapture(event.pointerId)) return;
       const rect = this.browserContent.getBoundingClientRect();
-      this.splitRatio = Math.max(0.2, Math.min(0.8, (event.clientX - rect.left) / rect.width));
+      const value = this.splitLayout === 'rows' ? (event.clientY - rect.top) / rect.height : (event.clientX - rect.left) / rect.width;
+      this.splitRatio = Math.max(0.2, Math.min(0.8, value));
       this.browserContent.style.setProperty('--split-ratio', String(this.splitRatio));
+      this.applySplitLayout();
     });
     const finish = (event) => {
       if (divider.hasPointerCapture(event.pointerId)) divider.releasePointerCapture(event.pointerId);
@@ -32,6 +36,7 @@ export const SplitPeekMixin = {
     divider.addEventListener('dblclick', () => {
       this.splitRatio = 0.5;
       this.browserContent.style.setProperty('--split-ratio', '0.5');
+      this.applySplitLayout();
     });
   },
 
@@ -44,13 +49,17 @@ export const SplitPeekMixin = {
       return;
     }
     if (!other || other.isHome || other.id === active.id) return;
+    const ids = this.splitPair?.includes(active.id) ? [...this.splitPair] : [active.id];
+    if (ids.includes(other.id)) return;
+    if (ids.length >= 4) { this.setStatus?.('Split View supports up to four pages.', 2500); return; }
     this.ensureWebview(other);
     if (other.pendingUrl && other.webview) {
       other.webview.src = other.pendingUrl;
       other.pendingUrl = null;
     }
     other.lastActiveAt = Date.now();
-    this.splitPair = [active.id, other.id];
+    this.splitPair = [...ids, other.id];
+    if (this.splitPair.length > 2) this.splitLayout = 'grid';
     this.applySplitLayout();
     this.updateSidebarActive?.();
   },
@@ -68,6 +77,18 @@ export const SplitPeekMixin = {
     else this.setStatus?.('Open another tab to split the window with.', 2500);
   },
 
+  addNextSplitPane() {
+    const next = this.getCycleOrder().find(t => !t.isHome && t.id !== this.activeTabId && !this.splitPair?.includes(t.id));
+    if (next) this.openSplitView(next.id);
+    else this.setStatus?.('Open another page to add a split pane.', 2000);
+  },
+
+  setSplitLayout(layout) {
+    if (!['columns', 'rows', 'grid'].includes(layout)) return;
+    this.splitLayout = layout;
+    this.applySplitLayout();
+  },
+
   exitSplitView() {
     if (!this.splitPair) return;
     this.splitPair = null;
@@ -78,8 +99,10 @@ export const SplitPeekMixin = {
   applySplitLayout() {
     const content = this.browserContent;
     if (!content) return;
-    content.querySelectorAll('webview.split-a, webview.split-b, webview.split-focused').forEach((webview) => {
-      webview.classList.remove('split-a', 'split-b', 'split-focused');
+    content.querySelectorAll('webview.split-a, webview.split-b, webview.split-pane, webview.split-focused').forEach((webview) => {
+      webview.classList.remove('split-a', 'split-b', 'split-pane', 'split-focused');
+      if (webview.id !== this.activeTabId) webview.classList.remove('active');
+      for (const property of ['left', 'top', 'width', 'height']) webview.style.removeProperty(property);
     });
 
     const pair = this.splitPair?.map(id => this.tabs.find(t => t.id === id));
@@ -88,21 +111,34 @@ export const SplitPeekMixin = {
       // Opening a tab outside the pair ends split view.
       this.splitPair = null;
       content.classList.remove('split');
+      content.classList.remove('split-rows', 'split-many');
       return;
     }
 
     content.classList.add('split');
+    content.classList.toggle('split-rows', this.splitLayout === 'rows');
+    content.classList.toggle('split-many', pair.length > 2);
     content.style.setProperty('--split-ratio', String(this.splitRatio));
-    const [left, right] = pair;
-    left.webview.classList.add('split-a', 'active');
-    right.webview.classList.add('split-b', 'active');
+    const rects = splitRects(pair.length, this.splitLayout, this.splitRatio);
+    pair.forEach((tab, i) => {
+      const r = rects[i];
+      tab.webview.classList.add('split-pane', 'active');
+      Object.assign(tab.webview.style, { left: `calc(${r.x * 100}% + ${r.x ? 3 : 0}px)`, top: `calc(${r.y * 100}% + ${r.y ? 3 : 0}px)`,
+        width: `calc(${r.width * 100}% - ${r.width < 1 ? 3 : 0}px)`, height: `calc(${r.height * 100}% - ${r.height < 1 ? 3 : 0}px)` });
+    });
     const focused = pair.find(tab => tab.id === this.activeTabId);
     focused?.webview.classList.add('split-focused');
     this.welcomePage?.classList.add('hidden');
   },
 
   onTabClosing(tab) {
-    if (this.splitPair?.includes(tab.id)) this.exitSplitView();
+    if (!this.splitPair?.includes(tab.id)) return;
+    const remaining = this.splitPair.filter(id => id !== tab.id);
+    if (remaining.length < 2) this.exitSplitView();
+    else {
+      this.splitPair = remaining;
+      if (this.activeTabId !== tab.id) this.applySplitLayout();
+    }
   },
 
   // ---------- Peek ----------
@@ -136,7 +172,7 @@ export const SplitPeekMixin = {
     this.peekSource = { spaceId: source?.spaceId || this.focusedSpaceId, privateMode: source?.privateMode === true };
     const webview = document.createElement('webview');
     webview.className = 'peek-webview';
-    webview.setAttribute('partition', source?.webview?.getAttribute('partition') || (source?.privateMode ? `private:${source.id}` : 'persist:main'));
+    webview.setAttribute('partition', source?.webview?.getAttribute('partition') || (source?.privateMode ? this.privatePartition(source.id) : this.partitionForProfile(this.profileForTab(source))));
     webview.setAttribute('webpreferences', WEBVIEW_PREFERENCES);
     webview.style.filter = `brightness(${(this.currentBrightness || 100) / 100})`;
     const setTitle = (text) => { if (this.peekTitle) this.peekTitle.textContent = text; };

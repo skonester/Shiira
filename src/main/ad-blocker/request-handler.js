@@ -6,6 +6,7 @@
 const { app, session, ipcMain } = require('electron');
 const fs = require('fs');
 const path = require('path');
+const { EventEmitter } = require('node:events');
 const { ElectronBlocker } = require('@ghostery/adblocker-electron');
 const { isYouTubeUrl, isYouTubeShortsUrl, isYouTubePlaybackRequest } = require('../../shared/youtube');
 
@@ -34,8 +35,9 @@ function runOncePerDocument(code) {
 const { RuleLoader } = require('./rule-loader');
 const { RuleEngine } = require('./rule-engine');
 
-class RequestHandler {
+class RequestHandler extends EventEmitter {
   constructor() {
+    super();
     this.ruleLoader = new RuleLoader();
     this.ruleEngine = new RuleEngine();
     this.initialized = false;
@@ -44,6 +46,8 @@ class RequestHandler {
     this.ghosteryContexts = [];
     this.ghosteryEnabled = false;
     this.usingLocalNetworkHook = false;
+    this.pageSessions = new Map();
+    this.stats = { blocked: 0, allowed: 0, total: 0, revision: 0 };
   }
 
   /**
@@ -77,6 +81,7 @@ class RequestHandler {
     }
 
     this.initialized = true;
+    for (const activeSession of this.pageSessions.keys()) this.attachPageSession(activeSession);
     console.log('[AdBlocker] Initialization complete');
   }
 
@@ -101,7 +106,7 @@ class RequestHandler {
       const filterRequest = this.ghosteryBlocker.onBeforeRequest;
       this.ghosteryBlocker.onBeforeRequest = (details, callback) => {
         if (isYouTubeShortsRequest(details) || isYouTubePlaybackRequest(details)) return callback({});
-        return filterRequest(details, callback);
+        return filterRequest(details, this.trackDecision(callback));
       };
       const filterResponse = this.ghosteryBlocker.onHeadersReceived;
       this.ghosteryBlocker.onHeadersReceived = (details, callback) => {
@@ -132,6 +137,25 @@ class RequestHandler {
     ];
     this.routeGhosteryCosmeticsToFrames();
     this.ghosteryEnabled = true;
+  }
+
+  attachPageSession(activeSession) {
+    if (activeSession === session.fromPartition('persist:main')) return;
+    if (!this.pageSessions.has(activeSession)) this.pageSessions.set(activeSession, false);
+    if (!this.initialized || this.pageSessions.get(activeSession)) return;
+    // Ghostery's global IPC handlers are installed once by the default context.
+    // Each additional profile only needs its own network hooks and preload.
+    if (this.ghosteryBlocker) activeSession.registerPreloadScript({ type: 'frame', filePath: require.resolve('@ghostery/adblocker-electron-preload') });
+    activeSession.webRequest.onBeforeRequest({ urls: ['<all_urls>'] }, (details, callback) => {
+      if (this.ghosteryEnabled) return this.ghosteryBlocker.onBeforeRequest(details, callback);
+      if (isYouTubeShortsRequest(details) || isYouTubePlaybackRequest(details)) return callback({});
+      const result = this.ruleEngine.shouldBlock({ url: details.url, resourceType: details.resourceType, initiator: details.referrer || details.url });
+      this.trackDecision(callback)(result.action === 'block' ? { cancel: true } : {});
+    });
+    activeSession.webRequest.onHeadersReceived({ urls: ['<all_urls>'] }, (details, callback) => {
+      if (this.ghosteryEnabled) this.ghosteryBlocker.onHeadersReceived(details, callback); else callback({});
+    });
+    this.pageSessions.set(activeSession, true);
   }
 
   // Ghostery's preload asks for cosmetic filters when a page loads and again as the page changes, and the
@@ -213,9 +237,9 @@ class RequestHandler {
         if (process.env.SHIIRA_DEBUG === 'true') {
           console.log(`[AdBlocker] Blocked: ${details.url.substring(0, 80)}...`);
         }
-        callback({ cancel: true });
+        this.trackDecision(callback)({ cancel: true });
       } else {
-        callback({});
+        this.trackDecision(callback)({});
       }
     };
 
@@ -224,9 +248,27 @@ class RequestHandler {
     console.log('[AdBlocker] Bundled request interception enabled');
   }
 
+  // Count the decision actually handed to Electron, for either engine and all
+  // page sessions. Ghostery does not update the bundled rule engine's counters.
+  trackDecision(callback) {
+    let completed = false;
+    return (decision) => {
+      if (completed) return;
+      completed = true;
+      callback(decision);
+      if (!this.isEnabled()) return;
+      this.stats.total++;
+      if (decision.cancel || decision.redirectURL) {
+        this.stats.blocked++;
+        this.stats.revision++;
+        this.emit('stats-updated', this.getStats());
+      } else this.stats.allowed++;
+    };
+  }
+
   getStats() {
     return {
-      ...this.ruleEngine.getStats(),
+      ...this.stats,
       aggressiveEngine: this.ghosteryEnabled ? 'ghostery-full' : 'bundled-rules',
       localNetworkHook: this.usingLocalNetworkHook
     };
@@ -234,6 +276,8 @@ class RequestHandler {
 
   resetStats() {
     this.ruleEngine.resetStats();
+    this.stats = { blocked: 0, allowed: 0, total: 0, revision: this.stats.revision + 1 };
+    this.emit('stats-updated', this.getStats());
   }
 
   setEnabled(enabled) {

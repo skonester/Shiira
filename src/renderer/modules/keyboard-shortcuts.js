@@ -37,6 +37,24 @@ export const KeyboardShortcutsMixin = {
       case 'copy-url':
         this.copyTabUrl?.();
         break;
+      case 'copy-markdown':
+        this.copyTabUrl?.(this.activeTabId, { markdown: true });
+        break;
+      case 'capture-area':
+        this.startAreaCapture?.();
+        break;
+      case 'page-devtools':
+        this.togglePageDevTools?.();
+        break;
+      case 'next-recent-tab':
+        this.stepTabSwitcher?.(1);
+        break;
+      case 'previous-recent-tab':
+        this.stepTabSwitcher?.(-1);
+        break;
+      case 'commit-tab-switcher':
+        this.commitTabSwitcher?.();
+        break;
       case 'private-tab':
         this.createTab(null, { privateMode: true, title: 'Private Tab' });
         break;
@@ -83,8 +101,19 @@ export const KeyboardShortcutsMixin = {
       case 'tab-expose':
         this.showTabExpose();
         break;
+      case 'zoom-in': this.zoomIn(); break;
+      case 'zoom-out': this.zoomOut(); break;
+      case 'zoom-reset': this.zoomReset(); break;
+      case 'show-boosts': this.showBoosts?.(); break;
+      case 'import-bookmarks': this.showBrowserImport?.(); break;
+      case 'little-window': void this.openLittleWindow?.(); break;
+      case 'promote-little':
+        if (this.isLittle) void this.promoteLittleWindow?.();
+        else this.peekToTab?.();
+        break;
       case 'close-popups':
-        if (this.isCommandBarOpen?.() && this.commandSiteSearch) this.setCommandSiteSearch(null);
+        if (this.tabSwitcher) this.cancelTabSwitcher();
+        else if (this.isCommandBarOpen?.() && this.commandSiteSearch) this.setCommandSiteSearch(null);
         else this.closeAllPopups();
         break;
       default:
@@ -94,140 +123,15 @@ export const KeyboardShortcutsMixin = {
   },
 
   setupDocumentKeyboardShortcuts() {
-    document.addEventListener('keydown', (e) => {
-      // Skip shortcuts when typing in input fields (except for specific combos)
-      const isInputFocused = document.activeElement?.tagName === 'INPUT' || 
-                             document.activeElement?.tagName === 'TEXTAREA';
-
-      if (e.ctrlKey && !e.shiftKey && e.key === ',') {
-        e.preventDefault();
-        this.showSettings();
-        return;
-      }
-      if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'f' &&
+    // Physical browser shortcuts are handled once in Electron, using the saved map.
+    // Keep local Settings search and synthetic Escape available to the DOM.
+    document.addEventListener('keydown', event => {
+      if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === 'f' &&
           this.settingsModal && !this.settingsModal.classList.contains('hidden')) {
-        e.preventDefault();
+        event.preventDefault();
         document.getElementById('settings-find')?.focus();
-        return;
       }
-      
-      // Ctrl+T: Command bar (sidebar layout) or new tab
-      if (e.ctrlKey && !e.shiftKey && e.key === 't') {
-        e.preventDefault();
-        this.handleNewTabShortcut ? this.handleNewTabShortcut() : this.createTab();
-        return;
-      }
-
-      // Ctrl+W: Close tab (pinned tabs and favorites unload instead)
-      if (e.ctrlKey && !e.shiftKey && e.key === 'w') {
-        e.preventDefault();
-        if (this.activeTabId) this.closeOrUnloadTab(this.activeTabId);
-        return;
-      }
-      
-      // Ctrl+Shift+T: Reopen closed tab
-      if (e.ctrlKey && e.shiftKey && e.key === 'T') {
-        e.preventDefault();
-        this.reopenClosedTab();
-        return;
-      }
-      // Ctrl+Tab: Next tab
-      if (e.ctrlKey && !e.shiftKey && e.key === 'Tab') {
-        e.preventDefault();
-        this.switchToNextTab();
-        return;
-      }
-      
-      // Ctrl+Shift+Tab: Previous tab
-      if (e.ctrlKey && e.shiftKey && e.key === 'Tab') {
-        e.preventDefault();
-        this.switchToPreviousTab();
-        return;
-      }
-      
-      // Ctrl+L: Focus URL bar (works even in input if it's not the URL bar)
-      if (e.ctrlKey && !e.shiftKey && e.key === 'l') {
-        e.preventDefault();
-        this.urlInput.focus();
-        this.urlInput.select();
-        return;
-      }
-      
-      // Ctrl+Shift+R: Hard reload (bypass cache)
-      if (e.ctrlKey && e.shiftKey && e.key === 'R') {
-        e.preventDefault();
-        this.hardReload();
-        return;
-      }
-      
-      // Ctrl+R or F5: Reload (only when not in input)
-      if ((e.ctrlKey && !e.shiftKey && e.key === 'r') || e.key === 'F5') {
-        e.preventDefault();
-        this.reload();
-        return;
-      }
-      
-      // Alt+Left: Go back
-      if (e.altKey && e.key === 'ArrowLeft') {
-        e.preventDefault();
-        this.goBack();
-        return;
-      }
-      
-      // Alt+Right: Go forward
-      if (e.altKey && e.key === 'ArrowRight') {
-        e.preventDefault();
-        this.goForward();
-        return;
-      }
-      
-      // Ctrl+H: History
-      if (e.ctrlKey && !e.shiftKey && e.key === 'h') {
-        e.preventDefault();
-        this.showHistoryPanel();
-        return;
-      }
-      
-      // Escape: Close panels
-      if (e.key === 'Escape') {
-        this.closeAllPopups();
-        return;
-      }
-      
-      // Ctrl+Shift+B: Toggle bookmarks bar
-      if (e.ctrlKey && e.shiftKey && e.key === 'B') {
-        e.preventDefault();
-        this.toggleBookmarksBar();
-        return;
-      }
-
-      // Ctrl+Shift+E: Tab Expose
-      if (e.ctrlKey && e.shiftKey && e.key === 'E') {
-        e.preventDefault();
-        this.showTabExpose();
-        return;
-      }
-
-      // Ctrl + Plus / Ctrl + =: Zoom In
-      if (e.ctrlKey && (e.key === '=' || e.key === '+')) {
-        e.preventDefault();
-        this.zoomIn();
-        return;
-      }
-
-      // Ctrl + Minus: Zoom Out
-      if (e.ctrlKey && e.key === '-') {
-        e.preventDefault();
-        this.zoomOut();
-        return;
-      }
-
-      // Ctrl + 0: Zoom Reset
-      if (e.ctrlKey && e.key === '0') {
-        e.preventDefault();
-        this.zoomReset();
-        return;
-      }
+      if (event.key === 'Escape') this.handleKeyboardShortcut('close-popups');
     });
   },
 

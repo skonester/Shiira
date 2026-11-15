@@ -12,18 +12,21 @@ export const AdBlockerMixin = {
    * Initialize ad blocker
    */
   async initAdBlocker() {
+    this.adblockStatsUnsubscribe?.();
+    this.adblockStatsUnsubscribe = window.shiiraAPI.adBlocker.onStatsUpdated(stats => this.applyAdBlockerStats(stats));
+    if (!this.adblockUnloadBound) {
+      this.adblockUnloadBound = true;
+      window.addEventListener('unload', () => this.adblockStatsUnsubscribe?.(), { once: true });
+    }
     try {
-      // Use the correct API - adBlocker.getStatus()
       const status = await window.shiiraAPI.adBlocker.getStatus();
       this.adblockEnabled = status.enabled !== false; // Default to true
-      this.adblockBlockedCount = 0;
       this.updateAdBlockerUI();
-      await this.updateAdBlockerStats();
+      this.applyAdBlockerStats(status.stats);
     } catch (e) {
       // If API fails, default to enabled and update UI
       console.error('Failed to initialize ad blocker:', e);
       this.adblockEnabled = true;
-      this.adblockBlockedCount = 0;
       this.updateAdBlockerUI();
     }
   },
@@ -47,12 +50,18 @@ export const AdBlockerMixin = {
   async updateAdBlockerStats() {
     try {
       const stats = await window.shiiraAPI.adBlocker.getStats();
-      if (this.adblockStats) {
-        this.adblockStats.textContent = `${formatCount(stats.blocked || 0)} requests blocked`;
-      }
+      this.applyAdBlockerStats(stats);
     } catch (e) {
       console.error('Failed to get ad block stats:', e);
     }
+  },
+
+  applyAdBlockerStats(stats) {
+    if (!stats || stats.revision < (this.adblockStatsRevision ?? -1)) return;
+    this.adblockStatsRevision = stats.revision;
+    this.adblockBlockedCount = stats.blocked || 0;
+    if (this.adblockStats) this.adblockStats.textContent = `${formatCount(this.adblockBlockedCount)} requests blocked`;
+    this.updateAdCounter(this.adblockBlockedCount);
   },
 
   /**
@@ -139,7 +148,7 @@ export const AdBlockerMixin = {
   },
 
   /**
-   * Update ad counter display for current tab
+   * Update the session-wide network block counter
    * @param {number} count - Number of ads blocked
    */
   updateAdCounter(count) {
@@ -147,6 +156,7 @@ export const AdBlockerMixin = {
       this.adCounterValue.textContent = count;
     }
     if (this.adCounter) {
+      this.adCounter.classList.toggle('hidden', count <= 0);
       this.adCounter.style.display = count > 0 ? 'flex' : 'none';
     }
   }

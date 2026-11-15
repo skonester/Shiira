@@ -55,6 +55,14 @@ A verbatim copy of the Apache License 2.0 is included at [`THIRD_PARTY_NOTICES/s
 
 Shiira's first-run setup, settings layout, and custom color wheel were adapted from the corresponding Zenium browser features by Bennett Buhner. The implementation was rewritten for Shiira's plain JavaScript renderer and existing browser preferences. Zenium is licensed under the Apache License 2.0; its license and copyright notice are included at [`THIRD_PARTY_NOTICES/zenium-APACHE-2.0.txt`](THIRD_PARTY_NOTICES/zenium-APACHE-2.0.txt).
 
+## Orbe Attribution (MIT License)
+
+Browser bookmark readers, the Netscape HTML parser, clean-link copying, Zap selector validation, keep-alive site rules, and synthetic bookmark fixtures are adapted from [Orbe](https://github.com/amadoubaui/orbe), copyright (c) 2026 **Amadou Ba (PIXEWORK)**, under the MIT License. The MRU switcher, Boosts editor, split layouts, capture tools and background media workflows were adapted to Shiira's existing renderer and session architecture. The complete license is included in [`THIRD_PARTY_NOTICES/orbe-MIT.txt`](THIRD_PARTY_NOTICES/orbe-MIT.txt). See [the implementation comparison](docs/orbe-feature-port.md) for scope and remaining differences.
+
+The shortcut canonicalizer and defaults/override/conflict workflow, host/path routing rules, and Little-window promotion workflow also follow Orbe's `shortcuts.js`, `prefs.js` and `little.js`. Little Shiira reuses Shiira's existing sandboxed webviews and player, with its own English UI and main-process delivery acknowledgements.
+
+Profiles per Space follow Orbe's persistent Chromium session model. Notes text blocks and sanitization, Easel item types and geometry bounds, safe image handling, and document export behavior are adapted from Orbe's `sessions.js`, `notes.js` and `easels.js`. Shiira supplies its own shared-sidebar merge protocol and English editors while preserving the existing player design.
+
 ---
 
 ## Solamar Attribution (GPL-3.0-or-later)
@@ -113,6 +121,12 @@ JavaScript stream resolver uses [YouTube.js](https://github.com/LuanRT/YouTube.j
 (MIT), and the adaptive player uses [Shaka Player](https://github.com/shaka-project/shaka-player)
 (Apache 2.0 and included component licenses). See
 [`THIRD_PARTY_NOTICES/litube-GPL-3.0-NOTICE.txt`](THIRD_PARTY_NOTICES/litube-GPL-3.0-NOTICE.txt).
+
+Playback diagnostics use FastPix, Inc's MIT-licensed Shaka analytics adapter
+1.0.7 from the supplied `shaka-player-analytics-main` project, adapted to use
+Shiira's local collector. The FastPix cloud core is not bundled. See the
+[adapter notes](src/preload/vendor/shaka-player-analytics/README.md) and
+[retained MIT license](THIRD_PARTY_NOTICES/fastpix-shaka-analytics-MIT.txt).
 
 Our modern browser shell utilizes the following open-source frameworks and dependencies:
 

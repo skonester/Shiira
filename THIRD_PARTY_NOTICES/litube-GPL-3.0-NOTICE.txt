@@ -7,10 +7,13 @@ Upstream projects:
 
 Shiira's src/main/youtube-service.js and src/preload/youtube-player.js adapt
 the playback approach in Litube's Extractor.kt, MscPlayback.kt,
-VideoId.kt, PlaybackLoadErrorPolicy.kt and MediaServiceCore's
-PlayerClientQueues.kt: a VisionOS-first direct-stream queue, shared extraction,
+VideoId.kt, YoutubeMediaRequests.kt, AdaptiveClientOrder.kt,
+PlaybackLoadErrorPolicy.kt, AndroidChallengeSolver.kt and MediaServiceCore's
+PlayerClientQueues.kt, PlayerReadiness.kt, PlayerRequest.kt and
+PlayerChallenges.kt at the commit above: a VisionOS-first direct-stream queue, shared extraction,
 short-lived stream caching, stale-write guards, deferred/rejected clients and
-bounded fresh-source recovery. The Kotlin/Media3 implementation has been
+bounded fresh-source recovery, pre-roll readiness estimates, query ranges,
+same-URL GET/POST compatibility, and shared challenge evaluation. The Kotlin/Media3 implementation has been
 reworked for Electron/JavaScript, YouTube.js and Shaka Player. Android binaries
 and the complete MediaServiceCore library are not bundled.
 

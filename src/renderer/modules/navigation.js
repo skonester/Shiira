@@ -264,6 +264,7 @@ export const NavigationMixin = {
 
   // Webview context menu
   showWebviewContextMenu(e, webview) {
+    this.hideAllContextMenus();
     this.contextMenuWebview = webview;
     this.contextMenuParams = e.params;
 
@@ -276,12 +277,17 @@ export const NavigationMixin = {
     this.webviewContextMenu.style.top = e.params.y + 'px';
     this.webviewContextMenu.classList.remove('hidden');
     this.contextMenuOverlay.classList.remove('hidden');
+    // Keep focus in the guest page so native cut/copy/paste commands act on
+    // its selection when a custom browser-chrome menu item is clicked.
+    this.webviewContextMenu.onmousedown = event => event.preventDefault();
 
     this.webviewContextMenu.querySelectorAll('.context-menu-item').forEach(item => {
       const action = item.dataset.action;
       if (action === 'copy' || action === 'search') {
         item.style.display = hasSelection ? 'flex' : 'none';
-      } else if (action === 'cut' || action === 'paste' || action === 'undo' || action === 'redo') {
+      } else if (action === 'cut') {
+        item.style.display = (isEditable && hasSelection) ? 'flex' : 'none';
+      } else if (action === 'paste' || action === 'undo' || action === 'redo' || action === 'select-all') {
         item.style.display = isEditable ? 'flex' : 'none';
       } else if (action === 'open-link' || action === 'open-link-new-tab' || action === 'copy-link' || action === 'save-link') {
         item.style.display = hasLink ? 'flex' : 'none';
@@ -289,9 +295,11 @@ export const NavigationMixin = {
         item.style.display = hasImage ? 'flex' : 'none';
       }
 
-      item.onclick = async () => {
-        await this.handleWebviewContextMenuAction(action);
+      item.onclick = event => {
+        event.stopPropagation();
+        const pending = this.handleWebviewContextMenuAction(action);
         this.hideWebviewContextMenu();
+        pending.catch(error => console.error('[ContextMenu] Action failed:', error));
       };
     });
 
@@ -341,6 +349,13 @@ export const NavigationMixin = {
     const webview = this.contextMenuWebview;
     const params = this.contextMenuParams;
     if (!webview || !params) return;
+
+    if (['undo', 'redo', 'cut', 'copy', 'paste', 'select-all'].includes(action)) {
+      // A host click can leave this DOM element active while the guest no
+      // longer has native focus. Force a new focus transition for every action.
+      webview.blur();
+      webview.focus();
+    }
     
     switch (action) {
       case 'back':
@@ -387,7 +402,7 @@ export const NavigationMixin = {
         break;
       case 'copy-link':
         if (params.linkURL) {
-          navigator.clipboard.writeText(params.linkURL);
+          await window.shiiraAPI.clipboard.writeText(params.linkURL);
         }
         break;
       case 'save-link':
@@ -414,7 +429,7 @@ export const NavigationMixin = {
         break;
       case 'copy-image-address':
         if (params.srcURL) {
-          navigator.clipboard.writeText(params.srcURL);
+          await window.shiiraAPI.clipboard.writeText(params.srcURL);
         }
         break;
       case 'save-page':

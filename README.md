@@ -38,7 +38,7 @@
 | | |
 | --- | --- |
 | **Engine** | Chromium 156 via Castlabs Electron 45 ([runtime maintenance](docs/runtime.md)) |
-| **Release** | `0.3.9` |
+| **Release** | `0.4.0` |
 | **Platforms** | Windows · macOS · Linux |
 | **License** | GPL-3.0-only |
 | **Best for** | Tab-heavy workflows, customization, and focused browsing |
@@ -59,15 +59,20 @@ Shiira is built for people who want a browser that feels like *their* workspace.
 ### A better way to manage tabs
 
 - **Spaces** keep separate projects in their own tab sets, names, emoji, and colors.
+- **Profiles per Space** separate website logins, storage, permissions, history, favorites and extensions. Create or rename a profile in the Space editor. Existing data stays in Default.
+- **Live sidebar updates** share Spaces, pinned tabs, folders, favorites and the archive between windows, merging independent edits while each window keeps its active page.
 - **Favorites, pinned tabs, and folders** stay available across restarts.
 - **Today tabs** automatically move inactive tabs to the Archive.
-- **Split view** places two tabs side by side, while **Peek** previews links without interrupting the page you are reading.
+- **Split view** places up to four pages in columns, stacked rows or a grid, while **Peek** previews links without interrupting the page you are reading.
 - **Tab sleep** releases memory from tabs you are not using and reloads them when needed.
 - **Tab Expose** gives you a visual overview of every open tab.
 
 ### Practical browser tools
 
-- Chrome bookmark import and **Arc migration** from a local installation or copied Arc folder: spaces, nested pinned tabs, all profiles' favorites, optional Today tabs and history, archived tabs, and cached icons. Favorites and history merge into Shiira's shared browsing session.
+- **Browser bookmark import** from Chrome, Edge, Brave, Vivaldi, Opera, Chromium, Firefox, Safari or an HTML export. Preview a source/profile, then choose a new Space, current Space or the bookmarks bar. Pinned bookmarks start asleep. **Arc migration** also brings spaces, nested pinned tabs, all profiles' favorites, optional Today tabs and history, archived tabs, and cached icons into Shiira's Default profile; assign different profiles to imported Spaces afterwards.
+- **Recent-tab switcher** with Ctrl+Tab, clean link and Markdown copying, Space export, area/full-page capture, per-site CSS **Boosts and Zap**, localhost developer mode, automatic picture-in-picture and sidebar media controls. See the [Orbe port comparison and remaining gaps](docs/orbe-feature-port.md).
+- **Little Shiira** opens quick pages with Ctrl/Cmd+Alt+N and promotes them into a chosen Space. **Link Routing** sends links from other apps to a Space or Little window. **Settings → Keyboard Shortcuts** records custom bindings, resolves browser-command conflicts and resets defaults.
+- **Notes and Easels** open from the pen button or command bar. Write formatted notes and checklists, or arrange text, drawings, shapes, images and page captures on a canvas. Documents autosave locally by profile, preserve concurrent edits through Save as copy, and export to text or PNG.
 - **Tab to Search** in the command bar: type a site such as `youtube` or `github`, press `Tab`, then enter your query. Search archived tabs too, or use `Shift+Enter` to open a webpage result in split view. Brave, Scira and DuckDuckGo shortcuts use Shiira's internal search tab.
 - Manifest V3 **Chrome extensions** from the Chrome Web Store.
 - Search inside the home tab with **Brave Search API**, **Scira AI API** (Web, Reddit, X, and People), or **DuckDuckGo Quick** instant answers. Add Brave and Scira keys in **Settings → Search**; keys stay in the operating system keychain. Brave and Scira automatically search their websites in the same tab if their APIs fail. See [search setup](docs/search.md).
@@ -82,7 +87,23 @@ Shiira is built for people who want a browser that feels like *their* workspace.
 - Optional clear-on-exit cache behavior and straightforward browsing-data controls.
 - Password storage backed by the operating system keychain.
 
-## Latest release — `0.3.9`
+Password Anvil and the bookmarks bar are app-wide tools. Vault autofill is enabled only in Default; other profiles do not receive its credentials automatically. Notes, Easels and shared sidebars are local to this installation, with no cloud account or cross-device sync.
+
+## Latest release — `0.4.0`
+
+- YouTube media requests retain Litube-style pre-roll availability deadlines, adaptive query ranges, and same-source POST compatibility after a refused GET. Shaka retries temporary failures before source recovery.
+- Pre-roll handling includes modern ad slots and forecasting ads with unknown duration. Buffering alone no longer unloads the player. Equal challenges share evaluation, and VOD HLS path challenges are resolved.
+- The separate WEB_SAFARI route preserves its request/media identity. Playback confirmation requires a decoded frame from Shiira's player; local diagnostics identify extraction, transport and player failures.
+- YouTube player DOM rebuilds retain the loaded stream. Terminal failures show a retry choice; native YouTube playback requires selecting its button.
+- Startup enables persistent V8 compilation caching before loading the main application, covering CommonJS and ES modules.
+- A lightweight splash uses the bundled Shiira logo while the browser prepares its initial tab.
+- The UI preload sets the home screen's dark canvas before renderer initialization. Remote fonts wait until initial readiness, and the splash timeout waits for first paint.
+- Graphics selection uses Chromium's platform defaults and driver restrictions instead of forcing Vulkan on every operating system.
+
+Live playback, splash appearance and startup timing still need verification in the packaged application.
+The [Litube playback audit](docs/litube-playback-audit.md) records the remaining gaps in the adaptation.
+
+## Previous release — `0.3.9`
 
 Version 0.3.9 brings a major browser-engine upgrade, fixes YouTube Shorts compatibility, and updates clipboard handling, password-storage dependencies, packaging, and release checks.
 

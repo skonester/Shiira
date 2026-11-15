@@ -92,6 +92,7 @@ export const UrlSuggestionsMixin = {
     // Search history in reverse (newest first)
     for (let i = this.browsingHistory.length - 1; i >= 0 && results.length < 5; i--) {
       const item = this.browsingHistory[i];
+      if ((item.profileId || 'default') !== (this.profileForSpace?.() || 'default')) continue;
       const url = item.url.toLowerCase();
       const title = (item.title || '').toLowerCase();
       
@@ -257,6 +258,7 @@ export const UrlSuggestionsMixin = {
     // Search history for matching URLs
     for (let i = this.browsingHistory.length - 1; i >= 0; i--) {
       const item = this.browsingHistory[i];
+      if ((item.profileId || 'default') !== (this.profileForSpace?.() || 'default')) continue;
       const url = item.url.replace(/^https?:\/\//, '').replace(/^www\./, '');
       
       if (url.toLowerCase().startsWith(lowerInput)) {

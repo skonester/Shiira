@@ -6,6 +6,9 @@
   --accent: #28d7ef;
   --accent-hover: #b85cff;
   --accent-pink: #ff4d9f;
+  --accent-rgb: 40, 215, 239;
+  --accent-hover-rgb: 184, 92, 255;
+  --accent-pink-rgb: 255, 77, 159;
   --text-primary: #f2fbff;
   --text-secondary: #9fb4c1;
   --border: #19243b;
@@ -2285,6 +2288,7 @@ webview.active {
 
 .context-menu.closing {
   animation: collapseContainer 0.14s ease forwards;
+  pointer-events: none;
 }
 
 .context-menu.hidden {
@@ -4177,11 +4181,32 @@ webview.active {
 }
 
 /* Ad-blocker stats badge */
+.context-menu-item[data-action="adblock"] {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) 36px;
+  column-gap: 10px;
+  row-gap: 3px;
+  align-items: center;
+  padding-right: 12px;
+}
+
+.context-menu-item[data-action="adblock"] .menu-icon {
+  margin: 0;
+}
+
+.context-menu-item[data-action="adblock"] .menu-toggle {
+  position: relative;
+  top: auto;
+  right: auto;
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  transform: none;
+}
+
 .adblock-stats {
-  position: absolute;
-  right: 56px;
-  top: 50%;
-  transform: translateY(-50%);
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: start;
   font-size: 11px;
   color: var(--text-secondary);
   background: var(--bg-tertiary);

@@ -103,7 +103,6 @@ const deadline = setTimeout(() => finish(new Error('Search smoke timed out')), 4
 function finish(error, details = {}) {
   clearTimeout(deadline);
   fs.writeFileSync(path.join(artifacts, 'result.json'), JSON.stringify({ success: !error, error: error?.stack, temporaryProfile: root, electron: process.versions.electron, fixtureResponses: true, ...details }, null, 2));
-  BrowserWindow.getAllWindows().forEach(win => win.destroy());
   app.exit(error ? 1 : 0);
 }
 async function capture(win, name, width = 1280, height = 800) {
@@ -133,7 +132,7 @@ app.whenReady().then(async () => {
     });
     let win;
     for (let n = 0; n < 120; n++) {
-      win = BrowserWindow.getAllWindows()[0];
+      win = BrowserWindow.getAllWindows().find(window => window.webContents.getLastWebPreferences().webviewTag);
       if (win && await win.webContents.executeJavaScript('Boolean(window.ShiiraBrowser?.spacesLoaded)').catch(() => false)) break;
       await delay(200);
     }

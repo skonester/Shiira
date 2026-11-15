@@ -5,22 +5,24 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { createRequire } = require('node:module');
 
-function filtering() {
+function filtering(decide = () => ({ cancel: true })) {
   const filename = path.resolve(__dirname, '../src/main/ad-blocker/request-handler.js');
   const localRequire = createRequire(filename);
   const defaultSession = { webRequest: { onBeforeRequest(_filter, handler) { this.handler = handler; } } };
   const browserSession = { webRequest: { onBeforeRequest(_filter, handler) { this.handler = handler; } } };
   const channels = new Map();
   const blocker = {
-    onBeforeRequest: (_details, callback) => callback({ cancel: true }),
+    onBeforeRequest: (details, callback) => callback(decide(details)),
     onHeadersReceived: (_details, callback) => callback({ responseHeaders: { 'content-security-policy': ["script-src 'none'"] } }),
     enableBlockingInSession: () => ({}),
     onInjectCosmeticFilters: () => { throw new Error('Shorts must not receive cosmetics'); }
   };
+  blocker.isBlockingEnabled = () => true;
+  blocker.disableBlockingInSession = () => {};
   const module = { exports: {} };
   vm.runInNewContext(fs.readFileSync(filename, 'utf8'), {
     module, exports: module.exports, console, process, fetch: () => {},
-    require(name) {
+    require: Object.assign(function (name) {
       if (name === 'electron') return {
         app: { getPath: () => '/fixture' },
         session: { defaultSession, fromPartition: () => browserSession },
@@ -28,7 +30,7 @@ function filtering() {
       };
       if (name === '@ghostery/adblocker-electron') return { ElectronBlocker: { fromPrebuiltFull: async () => blocker } };
       return localRequire(name);
-    }
+    }, { resolve: localRequire.resolve })
   });
   return { handler: new module.exports.RequestHandler(), blocker, defaultSession, browserSession, channels };
 }
@@ -75,4 +77,57 @@ test('bundled fallback rules also exempt Shorts and resume blocking on regular w
     current = watch;
     assert.deepEqual(result(target.webRequest.handler, { ...request, referrer: shorts }), { cancel: true });
   }
+});
+
+test('Ghostery counts cancel and resource redirects once and publishes real totals across page sessions', async () => {
+  const { handler, blocker } = filtering(details => details.url.includes('redirect')
+    ? { redirectURL: 'data:text/plain,blocked' } : details.url.includes('allowed') ? {} : { cancel: true });
+  await handler.setupGhosteryBlocker();
+  const updates = [];
+  handler.on('stats-updated', stats => updates.push(stats));
+  const request = { url: ad, resourceType: 'script', referrer: watch };
+  result(blocker.onBeforeRequest, request);
+  result(blocker.onBeforeRequest, { ...request, url: 'https://ads.example/redirect' });
+  result(blocker.onBeforeRequest, { ...request, url: 'https://example.com/allowed' });
+  result(blocker.onBeforeRequest, { ...request, referrer: shorts });
+  assert.equal(handler.ruleEngine.getStats().blocked, 0, 'Ghostery does not use the bundled matcher');
+  assert.equal(handler.getStats().blocked, 2);
+  assert.equal(handler.getStats().allowed, 1);
+  assert.equal(handler.getStats().total, 3);
+  assert.deepEqual(updates.map(stats => stats.blocked), [1, 2]);
+
+  const profile = { registerPreloadScript() {}, webRequest: {
+    onBeforeRequest(_filter, hook) { this.hook = hook; }, onHeadersReceived() {}
+  } };
+  handler.initialized = true;
+  handler.attachPageSession(profile);
+  result(profile.webRequest.hook, request);
+  assert.equal(handler.getStats().blocked, 3);
+  const revision = handler.getStats().revision;
+  handler.resetStats();
+  assert.equal(updates.at(-1).blocked, 0);
+  assert.ok(updates.at(-1).revision > revision, 'reset snapshots supersede older counts');
+  handler.setEnabled(false);
+  result(profile.webRequest.hook, request);
+  assert.equal(handler.getStats().blocked, 0);
+  handler.setEnabled(true);
+  result(profile.webRequest.hook, request);
+  assert.equal(handler.getStats().blocked, 1, 're-enabling cannot duplicate subscriptions');
+});
+
+test('bundled telemetry records the actual callback decision without counting rule matches twice', () => {
+  const { handler, defaultSession, browserSession } = filtering();
+  handler.ruleEngine.loadRules([{ id: 1, action: { type: 'block' }, condition: { requestDomains: ['ads.example'] } }]);
+  handler.setupBundledRequestInterception();
+  const request = { url: ad, resourceType: 'script', referrer: watch };
+  for (const target of [defaultSession, browserSession]) result(target.webRequest.handler, request);
+  assert.equal(handler.ruleEngine.getStats().blocked, 2);
+  assert.equal(handler.getStats().blocked, 2);
+  handler.setEnabled(false);
+  assert.deepEqual(result(browserSession.webRequest.handler, request), {});
+  assert.equal(handler.getStats().blocked, 2);
+  handler.resetStats();
+  handler.setEnabled(true);
+  result(browserSession.webRequest.handler, request);
+  assert.equal(handler.getStats().blocked, 1);
 });

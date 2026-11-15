@@ -1,0 +1,148 @@
+const { app, BrowserWindow, session, webContents, dialog, nativeImage } = require('electron');
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
+const http = require('node:http');
+const assert = require('node:assert/strict');
+const { randomBytes } = require('node:crypto');
+const appRoot = process.env.SHIIRA_SMOKE_APP_ROOT ? path.resolve(process.env.SHIIRA_SMOKE_APP_ROOT) : path.resolve(__dirname, '..');
+const loadApp = file => require(path.join(appRoot, file));
+if (process.env.SHIIRA_SMOKE_APP_ROOT) {
+  Object.defineProperty(app, 'isPackaged', { value: true }); Object.defineProperty(process, 'resourcesPath', { value: path.dirname(appRoot) }); app.getAppPath = () => appRoot;
+}
+const root = process.env.SHIIRA_SHARED_PROFILE || fs.mkdtempSync(path.join(os.tmpdir(), 'shiira-electron-orbe-shared-'));
+if (path.dirname(root) !== os.tmpdir() || !path.basename(root).startsWith('shiira-electron-orbe-shared-')) throw new Error('Use an isolated temporary smoke-test profile.');
+const artifacts = path.resolve(__dirname, '../tmp/orbe-shared-smoke'); fs.mkdirSync(artifacts, { recursive: true });
+app.setPath('userData', root); app.setPath('sessionData', root);
+app.on('browser-window-created', (_e, win) => { win.setSkipTaskbar(true); win.on('show', () => win.hide()); });
+loadApp('src/main/password-service').prototype.initializeEncryption = async function () { this.encryptionKey = randomBytes(32); };
+dialog.showSaveDialog = async (_win, options) => ({ filePath: path.join(root, options.defaultPath), canceled: false });
+const server = http.createServer((_req, res) => { res.writeHead(200, { 'content-type': 'text/html' }); res.end('<!doctype html><title>Shared fixture</title><body style="background:#123;color:white"><h1>Profile fixture</h1><input aria-label="Draft"></body>'); });
+let done = false, phase = 'startup';
+const timer = setTimeout(() => finish(new Error('Shared feature smoke timed out')), 85000);
+function finish(error, details = {}) {
+  if (done) return; done = true; clearTimeout(timer); server.close();
+  fs.writeFileSync(path.join(artifacts, 'result.json'), JSON.stringify({ success: !error, phase, error: error?.stack, packaged: app.isPackaged, temporaryProfile: root, ...details }, null, 2)); app.exit(error ? 1 : 0);
+}
+const delay = ms => new Promise(r => setTimeout(r, ms));
+async function until(fn, message) { for (let n = 0; n < 150; n++) { if (await fn()) return; await delay(60); } throw new Error(message); }
+const run = (win, code) => win.webContents.executeJavaScript(`(async () => { const b = window.ShiiraBrowser; ${code} })()`, true);
+async function pageOf(win, id) { let page; await until(async () => { const wcId = await run(win, `return b.tabs.find(t => t.id === ${JSON.stringify(id)})?.webview?.getWebContentsId();`).catch(() => null); page = wcId && webContents.fromId(wcId); return page && !page.isLoading(); }, 'Fixture page did not load'); return page; }
+async function capture(win, name) {
+  win.removeAllListeners('show'); win.setOpacity(0); win.setIgnoreMouseEvents(true); win.showInactive();
+  await delay(150); fs.writeFileSync(path.join(artifacts, name + '.png'), (await win.webContents.capturePage()).toPNG());
+}
+process.on('unhandledRejection', finish);
+loadApp('src/main/main');
+app.whenReady().then(async () => {
+  try {
+    await new Promise(r => server.listen(0, '127.0.0.1', r)); const base = `http://127.0.0.1:${server.address().port}`;
+    const main = BrowserWindow.getAllWindows().find(w => w.webContents.getLastWebPreferences().webviewTag);
+    await until(() => run(main, 'return b?.spacesLoaded;').catch(() => false), 'Initial sidebar failed');
+    if (process.env.SHIIRA_SHARED_PHASE === 'read') {
+      phase = 'restart persistence';
+      const saved = JSON.parse(fs.readFileSync(path.join(artifacts, 'restart.json'), 'utf8'));
+      assert.equal(await run(main, `return b.profiles.some(p=>p.id===${JSON.stringify(saved.pid)});`), true);
+      const persistedProfile = (await run(main, 'return b.profiles;')).find(p => p.id === saved.pid);
+      assert.ok((await session.fromPartition(persistedProfile.partition).cookies.get({ name: 'identity' })).some(c => c.value === 'work'));
+      await run(main, `b.showConfirmation=async()=>true; await b.changeSpaceProfile(${JSON.stringify(saved.work)},${JSON.stringify(saved.pid)}); b.focusSpace(${JSON.stringify(saved.work)}); await b.showWorkspace(); await b.openWorkspaceDocument(${JSON.stringify(saved.easelId)}); await b.loadEaselImages();`);
+      assert.equal(await run(main, 'return b.workspaceDoc.items.length;'), 3);
+      assert.equal(await run(main, 'return [...b.easelImages.values()].filter(i=>i.complete && i.naturalWidth>0).length;'), 2);
+      const noteDoc = await run(main, `return window.shiiraAPI.workspace.read(${JSON.stringify(saved.noteId)});`);
+      assert.equal(noteDoc.blocks[0].runs[0].s, 'Peer saved version');
+      finish(null, { ...saved.coverage, restartPersistence: true }); return;
+    }
+    const personal = await run(main, 'b.finishWelcomeSetup(); b.closeAllPopups(); return b.focusedSpaceId;');
+    const normalId = await run(main, `return b.createTab(${JSON.stringify(base + '/normal')});`); const normal = await pageOf(main, normalId);
+    await normal.executeJavaScript("document.cookie='identity=default; Max-Age=3600'; localStorage.setItem('identity','default');");
+    phase = 'isolated profiles';
+    const profile = await run(main, "return window.shiiraAPI.profiles.create('Work identity');"); assert.ok(profile.profile, profile.error);
+    const pid = profile.profile.id;
+    const work = await run(main, `const s = b.createSpace({title:'Work',profileId:${JSON.stringify(pid)}}); await b.saveSpacesNow(); return s.id;`);
+    main.unmaximize(); main.setSize(1100, 800);
+    await run(main, `b.openSpaceEditor('edit',${JSON.stringify(work)});`); await capture(main, 'profiles');
+    assert.equal(await run(main, "return document.getElementById('space-editor-save').getBoundingClientRect().bottom <= innerHeight;"), true);
+    await run(main, 'b.hideSpaceEditor();');
+    const workId = await run(main, `return b.createTab(${JSON.stringify(base + '/work')}, {spaceId:${JSON.stringify(work)}, section:'pinned'});`);
+    const page = await pageOf(main, workId);
+    assert.notEqual(page.session, normal.session); assert.equal(await page.executeJavaScript("document.cookie.includes('identity=default') || localStorage.getItem('identity') === 'default'"), false);
+    await page.executeJavaScript("document.cookie='identity=work; Max-Age=3600'; localStorage.setItem('identity','work');");
+    await run(main, "await window.shiiraAPI.privacy.setSetting('sitePermissions', {'127.0.0.1':{geolocation:true}});");
+    assert.equal(await normal.executeJavaScript("navigator.permissions.query({name:'geolocation'}).then(p=>p.state)"), 'granted');
+    assert.notEqual(await page.executeJavaScript("navigator.permissions.query({name:'geolocation'}).then(p=>p.state)"), 'granted', 'Permission grants stay in their profile');
+    assert.equal(await normal.executeJavaScript("localStorage.getItem('identity')"), 'default');
+    await run(main, `b.addToHistory('https://private-work.example/','Work entry',null,${JSON.stringify(pid)}); b.focusSpace(${JSON.stringify(personal)});`);
+    assert.equal(await run(main, "return b.getHistorySuggestions('private-work').length;"), 0);
+    await run(main, `b.focusSpace(${JSON.stringify(work)});`);
+    assert.equal(await run(main, "return b.getHistorySuggestions('private-work').length;"), 1);
+    await run(main, `b.createTab('https://work-favorite.example/', {section:'favorites', deferLoad:true}); b.focusSpace(${JSON.stringify(personal)});`);
+    assert.equal(await run(main, "return b.getVisibleTabOrder().some(t=>t.url.includes('work-favorite'));"), false);
+    await run(main, `b.switchTab(${JSON.stringify(workId)}); await b.saveSpacesNow();`);
+    const blocker = loadApp('src/main/ad-blocker').getAdBlocker(); await until(() => blocker.initialized, 'Blocking failed to initialize');
+    assert.equal(blocker.pageSessions.get(page.session), true, 'The isolated profile keeps network blocking');
+    phase = 'profile extension';
+    const extPath = path.join(root, 'profile-extension'); fs.mkdirSync(extPath);
+    fs.writeFileSync(path.join(extPath, 'manifest.json'), JSON.stringify({ manifest_version: 3, name: 'Profile fixture', version: '1.0', permissions: ['tabs'], action: {} }));
+    fs.writeFileSync(path.join(extPath, 'page.html'), '<!doctype html><title>Extension fixture</title>');
+    const ext = await page.session.extensions.loadExtension(extPath);
+    assert.equal((await run(main, `return window.shiiraAPI.extensions.list(${JSON.stringify(pid)});`)).some(e => e.id === ext.id), true, 'The isolated extension engine initialized');
+    assert.equal(normal.session.extensions.getExtension(ext.id) == null, true);
+    const extensionWindow = new BrowserWindow({ show: false, webPreferences: { session: page.session, sandbox: true, contextIsolation: true } });
+    await extensionWindow.loadURL(`chrome-extension://${ext.id}/page.html`);
+    const extensionTabs = await extensionWindow.webContents.executeJavaScript('chrome.tabs.query({}).then(tabs=>tabs.map(t=>t.id))');
+    assert.ok(extensionTabs.includes(page.id)); assert.equal(extensionTabs.includes(normal.id), false, 'Profile extensions cannot see another profile\'s tabs'); extensionWindow.destroy();
+    phase = 'shared sidebar';
+    await run(main, 'await window.shiiraAPI.createNewWindow();');
+    const peer = BrowserWindow.getAllWindows().find(w => w !== main && w.webContents.getLastWebPreferences().webviewTag);
+    await until(() => run(peer, 'return b?.spacesLoaded;').catch(() => false), 'Second sidebar failed');
+    assert.equal(await run(peer, 'return !!b.spacesReadOnly;'), false);
+    await run(main, `b.updateSpace(${JSON.stringify(work)}, {title:'Work together'}); await b.saveSpacesNow();`);
+    await until(() => run(peer, `return b.spaces.some(s=>s.id===${JSON.stringify(work)} && s.title==='Work together');`), 'Space rename did not synchronize');
+    const pin = await run(main, `const id=b.createTab(${JSON.stringify(base + '/shared-pin')},{spaceId:${JSON.stringify(work)},section:'pinned',deferLoad:true}); clearTimeout(b.saveSpacesTimer); return b.tabs.find(t=>t.id===id).itemId;`);
+    await run(peer, `b.focusSpace(${JSON.stringify(work)}); const prompt=b.showPrompt; b.showPrompt=async()=> 'Peer folder'; try { await b.createSidebarFolder(); b.sidebarFolders.find(f=>f.title==='Peer folder').id='shared-folder'; } finally { b.showPrompt=prompt; } b.placeTabElements(); clearTimeout(b.saveSpacesTimer);`);
+    await Promise.all([run(main, 'await b.saveSpacesNow();'), run(peer, 'await b.saveSpacesNow();')]);
+    for (const win of [main, peer]) await until(() => run(win, `return b.sidebarFolders.some(f=>f.id==='shared-folder') && b.tabs.some(t=>t.itemId===${JSON.stringify(pin)});`), 'Independent window edits did not merge');
+    assert.equal(await run(main, `return b.tabs.find(t=>t.id===${JSON.stringify(workId)}).webview.getWebContentsId();`), page.id, 'Sync preserves a live decoder/page');
+    phase = 'notes';
+    await run(main, `await b.showWorkspace('note'); document.getElementById('workspace-title').value='Project plan'; document.getElementById('workspace-title').dispatchEvent(new Event('input')); b.noteEditor.textContent='Literal <img src=x onerror=bad> text'; b.noteEditor.dispatchEvent(new Event('input')); await b.formatWorkspaceNote('todo'); await b.flushWorkspace();`);
+    const note = await run(main, 'return b.workspaceDoc;'); assert.equal(note.blocks[1].t, 'todo'); assert.equal(await run(main, "return b.noteEditor.querySelectorAll('img').length;"), 0);
+    await capture(main, 'notes'); await run(main, "await b.workspaceAction('export');"); assert.match(fs.readFileSync(path.join(root, 'Project plan.txt'), 'utf8'), /Literal <img/);
+    phase = 'Easel';
+    await run(main, "await b.newWorkspaceDocument('easel'); b.workspaceDoc.title='Canvas plan'; b.workspaceEdited(); document.querySelector('[data-easel-tool=rect]').click();");
+    const rect = await run(main, 'const r=b.easelCanvas.getBoundingClientRect(); return {x:Math.round(r.x+80),y:Math.round(r.y+70)};');
+    main.webContents.sendInputEvent({ type: 'mouseDown', ...rect, button: 'left', clickCount: 1 });
+    main.webContents.sendInputEvent({ type: 'mouseMove', x: rect.x + 220, y: rect.y + 140, modifiers: ['leftButtonDown'] });
+    main.webContents.sendInputEvent({ type: 'mouseUp', x: rect.x + 220, y: rect.y + 140, button: 'left', clickCount: 1 });
+    await until(() => run(main, "return b.workspaceDoc.items.some(i=>i.type==='rect' && i.w>200);"), 'Native canvas drawing did not create a rectangle');
+    const fixtureImage = path.join(root, 'image.png'); fs.writeFileSync(fixtureImage, nativeImage.createFromBitmap(Buffer.from([0, 0, 255, 255]), {width:1,height:1}).resize({ width: 80, height: 60 }).toPNG());
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [fixtureImage] });
+    const imageState = await run(main, "await b.workspaceAction('image'); const image={count:b.workspaceDoc.items.filter(i=>i.type==='image').length,status:document.getElementById('workspace-status').textContent}; await b.workspaceAction('capture'); return {image,capture:{count:b.workspaceDoc.items.filter(i=>i.type==='image').length,status:document.getElementById('workspace-status').textContent},active:b.activeTabId};");
+    assert.equal(imageState.image.count, 1, imageState.image.status); assert.equal(imageState.capture.count, 2, imageState.capture.status);
+    await run(main, 'await b.flushWorkspace(); await b.loadEaselImages();');
+    assert.equal(await run(main, "return b.workspaceDoc.items.filter(i=>i.type==='image').length;"), 2, await run(main, "return document.getElementById('workspace-status').textContent;"));
+    await capture(main, 'easel'); await run(main, "await b.workspaceAction('export');"); assert.ok(fs.statSync(path.join(root, 'Canvas plan.png')).size > 500);
+    const easelId = await run(main, 'return b.workspaceDoc.id;');
+    const stored = JSON.parse(fs.readFileSync(path.join(root, 'workspaces', easelId + '.json'), 'utf8')); assert.equal(stored.items.length, 3);
+    await run(main, "b.undoEasel(); b.undoEasel(true); await b.flushWorkspace();");
+    phase = 'concurrent note edits';
+    await run(main, `await b.openWorkspaceDocument(${JSON.stringify(note.id)}); b.noteEditor.textContent='My unsaved copy'; b.noteEditor.dispatchEvent(new Event('input')); clearTimeout(b.workspaceSaveTimer);`);
+    await run(peer, `await b.showWorkspace(); await b.openWorkspaceDocument(${JSON.stringify(note.id)}); b.noteEditor.textContent='Peer saved version'; b.noteEditor.dispatchEvent(new Event('input')); await b.flushWorkspace();`);
+    await until(() => run(main, 'return b.workspaceConflict;'), 'A concurrent note edit did not show a conflict');
+    assert.equal(await run(main, 'return b.flushWorkspace();'), false);
+    await run(main, "await b.workspaceAction('copy');"); assert.equal(await run(main, 'return b.workspaceDoc.blocks[0].runs[0].s;'), 'My unsaved copy');
+    assert.equal((await run(main, `return window.shiiraAPI.workspace.read(${JSON.stringify(note.id)});`)).blocks[0].runs[0].s, 'Peer saved version');
+    phase = 'profile change on live pages';
+    await run(main, 'await b.hideWorkspace();'); await run(peer, 'await b.hideWorkspace();');
+    const stableItem = await run(main, `return b.tabs.find(t=>t.id===${JSON.stringify(workId)}).itemId;`);
+    const peerId = await run(peer, `const t=b.tabs.find(t=>t.itemId===${JSON.stringify(stableItem)}); b.switchTab(t.id); return t.id;`); await pageOf(peer, peerId);
+    await run(main, `b.showConfirmation=async()=>true; await b.changeSpaceProfile(${JSON.stringify(work)},'default');`);
+    await until(() => run(peer, `return b.tabs.find(t=>t.id===${JSON.stringify(peerId)})?.webview?.getAttribute('partition')==='persist:main';`), 'Peer live page retained its previous profile');
+    assert.equal(await run(main, `return b.tabs.find(t=>t.id===${JSON.stringify(workId)})?.webview?.getAttribute('partition');`), 'persist:main');
+    assert.equal(await page.executeJavaScript('true').catch(() => false), false, 'The old profile guest is released');
+    assert.ok((await session.fromPartition(profile.profile.partition).cookies.get({ name: 'identity' })).some(c => c.value === 'work'), 'Changing the Space does not delete the previous profile');
+    await session.fromPartition(profile.profile.partition).cookies.flushStore();
+    const coverage = { profiles: true, cookies: true, localStorage: true, history: true, favorites: true, profileExtensions: true, blocking: true, liveSidebar: true, preservesLivePage: true, notes: true, easels: true, imageCapture: true, exports: true, conflictCopy: true, profileChangeAcrossWindows: true };
+    fs.writeFileSync(path.join(artifacts, 'restart.json'), JSON.stringify({ pid, work, easelId, noteId: note.id, coverage }));
+    finish(null, coverage);
+  } catch (error) { finish(error); }
+});

@@ -1,7 +1,53 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+// Set the document canvas before stylesheets or the renderer module can paint.
+function applyStartupBackground() {
+  const root = document.documentElement;
+  if (!root) return false;
+  root.style.backgroundColor = 'var(--bg-primary, #020308)';
+  root.style.colorScheme = 'dark';
+  if (typeof process !== 'undefined' && process.argv.includes('--shiira-window-kind=little')) root.classList.add('little-window');
+  return true;
+}
+
+if (!applyStartupBackground()) {
+  const observer = new MutationObserver(() => {
+    if (applyStartupBackground()) observer.disconnect();
+  });
+  observer.observe(document, { childList: true });
+}
+
 // Expose protected methods to the renderer process
 contextBridge.exposeInMainWorld('shiiraAPI', {
+  startupReady: () => ipcRenderer.send('startup-ready'),
+  playbackAnalytics: {
+    list: () => ipcRenderer.invoke('youtube-analytics-list'),
+    get: id => ipcRenderer.invoke('youtube-analytics-get', id),
+    export: id => ipcRenderer.invoke('youtube-analytics-export', id)
+  },
+  windowMode: typeof process !== 'undefined' && process.argv.includes('--shiira-window-kind=little') ? 'little' : 'browser',
+  shortcuts: {
+    get: () => ipcRenderer.invoke('shortcuts-get'),
+    assign: (id, key, options) => ipcRenderer.invoke('shortcuts-assign', id, key, options),
+    reset: (id, options) => ipcRenderer.invoke('shortcuts-reset', id, options),
+    record: (id, recordId) => ipcRenderer.invoke('shortcuts-record', id, recordId),
+    cancelRecord: () => ipcRenderer.invoke('shortcuts-cancel-record'),
+    onChanged: callback => ipcRenderer.on('shortcuts-changed', (_event, settings) => callback(settings)),
+    onRecorded: callback => ipcRenderer.on('shortcuts-recorded', (_event, result) => callback(result))
+  },
+  externalLinks: {
+    get: () => ipcRenderer.invoke('external-links-get'),
+    save: input => ipcRenderer.invoke('external-links-save', input),
+    preview: url => ipcRenderer.invoke('external-links-preview', url),
+    openLittle: url => ipcRenderer.invoke('external-links-open-little', url),
+    openMain: (url, spaceId) => ipcRenderer.invoke('external-links-open-main', url, spaceId),
+    promote: spaceId => ipcRenderer.invoke('external-links-promote', spaceId),
+    onOpen: callback => ipcRenderer.on('external-link-open', (_event, request) => callback(request)),
+    acknowledge: (id, result) => ipcRenderer.send('external-link-opened', id, result),
+    onLittleOpen: callback => ipcRenderer.on('little-open', (_event, url) => callback(url)),
+    onFocusAddress: callback => ipcRenderer.on('little-focus-address', () => callback()),
+    onError: callback => ipcRenderer.on('little-error', (_event, error) => callback(error))
+  },
   // Window controls
   minimize: () => ipcRenderer.invoke('window-minimize'),
   maximize: () => ipcRenderer.invoke('window-maximize'),
@@ -46,6 +92,10 @@ contextBridge.exposeInMainWorld('shiiraAPI', {
   createPasswordAnvilWindow: () => ipcRenderer.invoke('create-password-anvil-window'),
   downloadFile: (url, options) => ipcRenderer.invoke('download-url', url, options),
   copyImage: (url) => ipcRenderer.invoke('copy-image-url', url),
+  clipboard: {
+    readText: () => ipcRenderer.invoke('clipboard-read-text'),
+    writeText: (text) => ipcRenderer.invoke('clipboard-write-text', text)
+  },
   showItemInFolder: (pathToShow) => ipcRenderer.invoke('show-item-in-folder', pathToShow),
   
   // Session management (tab persistence)
@@ -59,13 +109,32 @@ contextBridge.exposeInMainWorld('shiiraAPI', {
   // Spaces, pinned tabs, favorites and archive (Arc-style sidebar)
   spaces: {
     load: () => ipcRenderer.invoke('spaces-load'),
-    save: (doc) => ipcRenderer.invoke('spaces-save', doc)
+    save: (doc, revision) => ipcRenderer.invoke('spaces-save', doc, revision),
+    onChanged: callback => ipcRenderer.on('spaces-changed', (_event, doc) => callback(doc))
+  },
+  profiles: {
+    list: () => ipcRenderer.invoke('profiles-list'),
+    create: name => ipcRenderer.invoke('profiles-create', name),
+    rename: (id, name) => ipcRenderer.invoke('profiles-rename', id, name),
+    onChanged: callback => ipcRenderer.on('profiles-changed', (_event, profiles) => callback(profiles))
+  },
+  workspace: {
+    list: profileId => ipcRenderer.invoke('workspace-list', profileId),
+    read: id => ipcRenderer.invoke('workspace-read', id),
+    create: (kind, profileId, title) => ipcRenderer.invoke('workspace-create', kind, profileId, title),
+    save: doc => ipcRenderer.invoke('workspace-save', doc),
+    copy: doc => ipcRenderer.invoke('workspace-copy', doc),
+    remove: (id, revision) => ipcRenderer.invoke('workspace-delete', id, revision),
+    image: (id, name) => ipcRenderer.invoke('workspace-image', id, name),
+    addImage: (id, options) => ipcRenderer.invoke('workspace-add-image', id, options),
+    export: (id, png) => ipcRenderer.invoke('workspace-export', id, png),
+    onChanged: callback => ipcRenderer.on('workspace-changed', (_event, change) => callback(change))
   },
 
   // Chrome extensions
   extensions: {
-    list: () => ipcRenderer.invoke('extensions-list'),
-    uninstall: (id) => ipcRenderer.invoke('extensions-uninstall', id),
+    list: profileId => ipcRenderer.invoke('extensions-list', profileId),
+    uninstall: (id, profileId) => ipcRenderer.invoke('extensions-uninstall', id, profileId),
     tabCreated: (requestId, webContentsId) => ipcRenderer.invoke('extensions-tab-created', requestId, webContentsId),
     tabSelected: (webContentsId) => ipcRenderer.invoke('extensions-tab-selected', webContentsId),
     decideInstall: (id, ok) => ipcRenderer.invoke('extensions-install-decision', id, ok),
@@ -85,6 +154,21 @@ contextBridge.exposeInMainWorld('shiiraAPI', {
 
 
   // Chrome Import
+  boosts: {
+    get: id => ipcRenderer.invoke('boosts-get', id),
+    save: (id, origin, patch) => ipcRenderer.invoke('boosts-save', id, origin, patch)
+  },
+  pageTools: {
+    mediaControl: (id, action, value) => ipcRenderer.invoke('page-media-control', id, action, value),
+    canSleep: id => ipcRenderer.invoke('page-can-sleep', id),
+    capture: (id, options) => ipcRenderer.invoke('page-capture', id, options),
+    exportBookmarks: (title, html) => ipcRenderer.invoke('spaces-export-html', title, html)
+  },
+  browserImport: {
+    detect: () => ipcRenderer.invoke('browser-import-detect'),
+    preview: (source) => ipcRenderer.invoke('browser-import-preview', source),
+    apply: (token, target) => ipcRenderer.invoke('browser-import-apply', token, target)
+  },
   chromeImport: {
     getProfiles: () => ipcRenderer.invoke('chrome-get-profiles'),
     getImportSummary: (profileId) => ipcRenderer.invoke('chrome-get-import-summary', profileId),
@@ -179,7 +263,12 @@ contextBridge.exposeInMainWorld('shiiraAPI', {
     getStats: () => ipcRenderer.invoke('adblock-get-stats'),
     resetStats: () => ipcRenderer.invoke('adblock-reset-stats'),
     getRulesets: () => ipcRenderer.invoke('adblock-get-rulesets'),
-    setRulesets: (rulesetIds) => ipcRenderer.invoke('adblock-set-rulesets', rulesetIds)
+    setRulesets: (rulesetIds) => ipcRenderer.invoke('adblock-set-rulesets', rulesetIds),
+    onStatsUpdated: (callback) => {
+      const listener = (_event, stats) => callback(stats);
+      ipcRenderer.on('adblock-stats-updated', listener);
+      return () => ipcRenderer.removeListener('adblock-stats-updated', listener);
+    }
   },
   
   // Cosmetic filter controls (element hiding)

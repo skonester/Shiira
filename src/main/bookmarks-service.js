@@ -55,15 +55,18 @@ class BookmarksService {
 
     saveConfig() {
         try {
-            fs.writeFileSync(this.configPath, JSON.stringify({
+            fs.writeFileSync(this.configPath + '.tmp', JSON.stringify({
                 bookmarks: this.bookmarks,
                 barEnabled: this.barEnabled,
                 nextId: this.nextId
             }, null, 2));
+            fs.renameSync(this.configPath + '.tmp', this.configPath);
+            return true;
         } catch (e) {
             if (!app.isPackaged) {
                 console.error('Failed to save bookmarks config:', e);
             }
+            return false;
         }
     }
 
@@ -290,84 +293,51 @@ class BookmarksService {
         return folders;
     }
 
-    // Import bookmarks from HTML (Chrome/Firefox format)
+    // Imports are staged and saved once, preserving folder paths and order.
     importFromHtml(htmlContent) {
+        const parser = require('./import-bookmarks');
+        if (typeof htmlContent !== 'string' || Buffer.byteLength(htmlContent) > parser.MAX_BYTES) return { success: false, error: 'Bookmark file is too large (8 MB maximum).' };
+        const data = parser.parse(htmlContent);
+        if (!data.bookmarks) return { success: false, error: 'No supported web bookmarks found.' };
+        return this.importTree(data.nodes, 'Imported Bookmarks');
+    }
+
+    importTree(nodes, name = 'Imported Bookmarks') {
+        const previous = this.bookmarks;
+        const previousId = this.nextId;
+        const previousEnabled = this.barEnabled;
+        this.bookmarks = structuredClone(previous);
+        const imported = { bookmarks: 0, folders: 0, skipped: 0 };
         try {
-            const imported = { bookmarks: 0, folders: 0 };
-            
-            // Simple regex-based parsing for Netscape bookmark format (no jsdom needed)
-            const dtMatches = htmlContent.match(/<DT>[\s\S]*?(?=<DT>|<\/DL>)/gi) || [];
-            
-            let currentFolderId = null;
-            let folderStack = [null]; // Stack to track nested folders
-            
-            // Process line by line for better control
-            const lines = htmlContent.split('\n');
-            
-            for (const line of lines) {
-                // Check for folder start
-                const folderMatch = line.match(/<H3[^>]*>([^<]+)<\/H3>/i);
-                if (folderMatch) {
-                    const folderName = this.decodeHtmlEntities(folderMatch[1]);
-                    
-                    // Skip "Bookmarks bar" as we use our own
-                    if (folderName.toLowerCase() === 'bookmarks bar' || 
-                        folderName.toLowerCase() === 'bookmarks') {
-                        continue;
-                    }
-                    
-                    const result = this.createFolder({ 
-                        name: folderName, 
-                        parentFolderId: folderStack[folderStack.length - 1] 
-                    });
-                    
-                    if (result.success) {
-                        folderStack.push(result.folder.id);
-                        imported.folders++;
-                    }
-                    continue;
+            const folderIn = (items, title) => {
+                let folder = items.filter(item => item.type === 'folder-ref').map(item => this.bookmarks.folders[item.id]).find(item => item?.name === title);
+                if (!folder) {
+                    folder = { id: this.generateId(), type: 'folder', name: title, children: [], createdAt: Date.now() };
+                    this.bookmarks.folders[folder.id] = folder;
+                    items.push({ id: folder.id, type: 'folder-ref' });
+                    imported.folders++;
                 }
-                
-                // Check for folder end
-                if (line.includes('</DL>')) {
-                    if (folderStack.length > 1) {
-                        folderStack.pop();
-                    }
-                    continue;
-                }
-                
-                // Check for bookmark
-                const bookmarkMatch = line.match(/<A\s+HREF="([^"]+)"[^>]*(?:ICON="([^"]*)")?[^>]*>([^<]*)<\/A>/i);
-                if (bookmarkMatch) {
-                    const url = bookmarkMatch[1];
-                    const title = this.decodeHtmlEntities(bookmarkMatch[3]);
-                    
-                    // Extract icon if present
-                    const iconMatch = line.match(/ICON="([^"]*)"/i);
-                    let icon = iconMatch ? iconMatch[1] : null;
-                    
-                    // Validate and sanitize icon
-                    if (icon) {
-                        icon = this.validateAndSanitizeIcon(icon);
-                    }
-                    
-                    const result = this.addBookmark({
-                        url,
-                        title,
-                        icon,
-                        folderId: folderStack[folderStack.length - 1]
-                    });
-                    
-                    if (result.success) {
+                return folder.children;
+            };
+            const walk = (list, items) => {
+                for (const node of list) {
+                    if (node.type === 'folder') walk(node.children, folderIn(items, node.name));
+                    else if (items.some(item => item.type === 'bookmark' && item.url === node.url)) imported.skipped++;
+                    else {
+                        items.push({ id: this.generateId(), type: 'bookmark', title: node.title, url: node.url, icon: null, addedAt: Date.now() });
                         imported.bookmarks++;
                     }
                 }
-            }
-            
+            };
+            walk(nodes, folderIn(this.bookmarks.bar, name));
+            this.barEnabled = true;
+            if (!this.saveConfig()) throw new Error('Could not save imported bookmarks.');
             return { success: true, imported };
-        } catch (e) {
-            console.error('Failed to import bookmarks:', e);
-            return { success: false, error: e.message };
+        } catch (error) {
+            this.bookmarks = previous;
+            this.nextId = previousId;
+            this.barEnabled = previousEnabled;
+            return { success: false, error: error.message };
         }
     }
 

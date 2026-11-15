@@ -3,8 +3,8 @@
 // windows / action APIs; electron-chrome-web-store installs and updates extensions from the Chrome Web Store.
 // Adapted from Solamar's src/main/extensions.ts (https://github.com/Bambeek/solamar, GPL-3.0-or-later).
 //
-// Extensions run in the 'persist:main' session that normal tabs use. Private tabs have their own in-memory
-// sessions, so extensions never see them, like Chrome's incognito windows.
+// Each browser profile has its own extension engine and install directory.
+// Default retains 'persist:main'. Private sessions never join an extension engine.
 
 const fs = require('fs');
 const path = require('path');
@@ -57,7 +57,10 @@ function describePermissions(manifest = {}) {
 }
 
 class ExtensionsService {
-  constructor() {
+  constructor(profileId = 'default', partition = PARTITION, master = null) {
+    this.profileId = profileId; this.partition = partition; this.master = master || this;
+    this.engines = master ? master.engines : new Map();
+    this.engines.set(profileId, this);
     this.ready = false;
     this.session = null;
     this.extensions = null;
@@ -73,13 +76,13 @@ class ExtensionsService {
    */
   initialize({ getWindow }) {
     this.getWindow = getWindow;
-    this.extensionsPath = path.join(app.getPath('userData'), 'Extensions');
+    this.extensionsPath = path.join(app.getPath('userData'), this.profileId === 'default' ? 'Extensions' : `Extensions-${this.profileId}`);
     try {
       const { ElectronChromeExtensions } = require('electron-chrome-extensions');
       const { installChromeWebStore } = require('electron-chrome-web-store');
-      this.session = session.fromPartition(PARTITION);
+      this.session = session.fromPartition(this.partition);
       // Extension icons in Shiira's own window come through crx:// in the UI's session.
-      ElectronChromeExtensions.handleCRXProtocol(session.defaultSession);
+      if (this.master === this) ElectronChromeExtensions.handleCRXProtocol(session.defaultSession);
       this.extensions = new ElectronChromeExtensions({
         session: this.session,
         createTab: (details) => this.createTab(details.url, details.active !== false),
@@ -111,8 +114,7 @@ class ExtensionsService {
         beforeInstall: (details) => this.confirmInstall(details)
       }).catch((error) => console.error('[Extensions] Chrome Web Store support failed:', error));
 
-      this.installToolbarPreload();
-      this.registerIpc();
+      if (this.master === this) { this.installToolbarPreload(); this.registerIpc(); }
       this.ready = true;
       console.log('[Extensions] Ready');
     } catch (error) {
@@ -156,9 +158,10 @@ class ExtensionsService {
     this.windows.add(win);
     win.on('closed', () => this.windows.delete(win));
     win.webContents.on('did-attach-webview', (event, guest) => {
-      if (!this.ready || guest.session !== this.session) return;
+      const engine = [...this.engines.values()].find(e => e.ready && e.session === guest.session);
+      if (!engine) return;
       try {
-        this.extensions.addTab(guest, win);
+        engine.extensions.addTab(guest, win);
       } catch (error) {
         console.warn('[Extensions] Could not add tab:', error.message);
       }
@@ -183,13 +186,13 @@ class ExtensionsService {
         reject(new Error('No Shiira window is open.'));
         return;
       }
-      const requestId = ++this.counter;
+      const requestId = this.profileId === 'default' ? ++this.counter : `${this.profileId}:${++this.counter}`;
       const timer = setTimeout(() => {
         this.pendingTabs.delete(requestId);
         reject(new Error('Shiira did not open the tab in time.'));
       }, 15000);
       this.pendingTabs.set(requestId, { resolve, reject, win, timer });
-      win.webContents.send('extensions-create-tab', { requestId, url: typeof url === 'string' && url ? url : 'about:blank', active });
+      win.webContents.send('extensions-create-tab', { requestId, url: typeof url === 'string' && url ? url : 'about:blank', active, profileId: this.profileId });
     });
   }
 
@@ -197,7 +200,7 @@ class ExtensionsService {
   confirmInstall(details) {
     const win = this.getWindow();
     if (!win || win.isDestroyed()) return Promise.resolve({ action: 'deny' });
-    const id = `install-${++this.counter}`;
+    const id = `install-${this.profileId}-${++this.counter}`;
     let icon = '';
     try {
       if (details.icon && !details.icon.isEmpty()) icon = details.icon.resize({ width: 48, height: 48 }).toDataURL();
@@ -210,10 +213,12 @@ class ExtensionsService {
         resolve({ action: ok ? 'allow' : 'deny' });
       };
       this.pendingInstalls.set(id, finish);
+      finish.owner = win.webContents;
       win.once('closed', () => this.pendingInstalls.has(id) && finish(false));
       win.webContents.send('extensions-install-prompt', {
         id,
         extensionId: details.id,
+        profileId: this.profileId,
         name: details.localizedName || details.manifest?.name || details.id,
         icon,
         permissions: describePermissions(details.manifest)
@@ -251,21 +256,23 @@ class ExtensionsService {
   }
 
   notifyChanged() {
-    for (const win of this.windows) {
+    for (const win of this.master.windows) {
       if (!win.isDestroyed()) win.webContents.send('extensions-changed');
     }
   }
 
   registerIpc() {
-    ipcMain.handle('extensions-list', () => this.list());
-    ipcMain.handle('extensions-uninstall', (event, id) => this.uninstall(id));
+    ipcMain.handle('extensions-list', (_event, profileId = 'default') => this.engines.get(profileId)?.list() || []);
+    ipcMain.handle('extensions-uninstall', (_event, id, profileId = 'default') => this.engines.get(profileId)?.uninstall(id) || { error: 'Profile unavailable.' });
     ipcMain.handle('extensions-tab-created', (event, requestId, wcId) => {
-      const pending = this.pendingTabs.get(requestId);
+      const engine = [...this.engines.values()].find(e => e.pendingTabs.has(requestId));
+      const pending = engine?.pendingTabs.get(requestId);
       if (!pending) return false;
-      this.pendingTabs.delete(requestId);
+      if (pending.win.webContents !== event.sender) return false;
+      engine.pendingTabs.delete(requestId);
       clearTimeout(pending.timer);
       const wc = webContents.fromId(wcId);
-      if (!wc) {
+      if (!wc || wc.hostWebContents !== event.sender || wc.session !== engine.session) {
         pending.reject(new Error('The tab closed before it opened.'));
         return false;
       }
@@ -275,19 +282,29 @@ class ExtensionsService {
     // The renderer tells the library which tab is on screen (for chrome.tabs.query({ active: true })).
     ipcMain.handle('extensions-tab-selected', (event, wcId) => {
       const wc = Number.isInteger(wcId) ? webContents.fromId(wcId) : null;
-      if (!wc || wc.isDestroyed() || wc.session !== this.session) return false;
+      const engine = wc && [...this.engines.values()].find(e => e.session === wc.session);
+      if (!wc || wc.isDestroyed() || wc.hostWebContents !== event.sender || !engine) return false;
       try {
-        this.extensions.selectTab(wc);
+        engine.extensions.selectTab(wc);
       } catch (error) {
         // The library has not seen this tab yet; it will once it attaches.
       }
       return true;
     });
     ipcMain.handle('extensions-install-decision', (event, id, ok) => {
-      const finish = this.pendingInstalls.get(id);
-      if (finish) finish(ok === true);
-      return Boolean(finish);
+      const engine = [...this.engines.values()].find(e => e.pendingInstalls.has(id));
+      const finish = engine?.pendingInstalls.get(id);
+      if (finish?.owner !== event.sender) return false;
+      finish(ok === true);
+      return true;
     });
+  }
+
+  ensureProfile(profileId, partition) {
+    if (this.engines.has(profileId)) return this.engines.get(profileId);
+    const engine = new ExtensionsService(profileId, partition, this);
+    engine.initialize({ getWindow: this.getWindow });
+    return engine;
   }
 }
 

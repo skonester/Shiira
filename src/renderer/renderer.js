@@ -33,6 +33,17 @@ import { CommandBarMixin } from './modules/command-bar.js';
 import { SplitPeekMixin } from './modules/split-peek.js';
 import { ExtensionsMixin } from './modules/extensions.js';
 import { HomeSearchMixin } from './modules/home-search.js';
+import { BrowserImportMixin } from './modules/browser-import.js';
+import { TabSwitcherMixin } from './modules/tab-switcher.js';
+import { PageToolsMixin } from './modules/page-tools.js';
+import { BoostsMixin } from './modules/boosts.js';
+import { MiniPlayerMixin } from './modules/mini-player.js';
+import { ShortcutSettingsMixin } from './modules/shortcut-settings.js';
+import { ExternalLinksMixin } from './modules/external-links.js';
+import { SidebarSyncMixin } from './modules/sidebar-sync.js';
+import { ProfilesMixin } from './modules/profiles.js';
+import { WorkspaceMixin } from './modules/workspace.js';
+import { EaselEditorMixin } from './modules/easel-editor.js';
 
 console.log('[Shiira] Loading modular renderer...');
 
@@ -60,6 +71,7 @@ class ShiiraBrowser {
     this.activeTabId = null;
     this.tabCounter = 0;
     this.homepage = 'shiira://home';
+    this.isLittle = window.shiiraAPI.windowMode === 'little';
     
     // Closed tabs for reopen (Ctrl+Shift+T)
     this.closedTabs = [];
@@ -110,12 +122,20 @@ class ShiiraBrowser {
     this.initUrlSuggestions();
     this.initBrightnessControl();
     this.initKeyboardShortcuts();
+    this.initTabSwitcher();
+    this.initPageTools();
+    this.initBoosts();
+    this.initMiniPlayers();
     this.initWelcomeParticles();
     this.initModalSystem();
     this.initThemes();
     this.initDarkWebRenderer();
     this.initShiiraHomage();
     this.initWelcomeSettings();
+    this.initExternalLinks();
+    this.initShortcutSettings();
+    this.initBrowserImport();
+    this.initWorkspace();
     this.initBookmarksBar();
     this.initTextContextMenu();
     this.initPermissionDialog();
@@ -167,10 +187,15 @@ class ShiiraBrowser {
     }).catch(err => {
       console.error('[Session] Restore failed in background:', err);
       if (!this.activeTabId) this.createTab();
+    }).finally(() => {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        window.shiiraAPI.startupReady();
+        document.getElementById('shiira-fonts').rel = 'stylesheet';
+      }));
     });
 
     // Set up session save on window close
-    this.setupSessionPersistence();
+    if (!this.isLittle) this.setupSessionPersistence();
     
     this.updateStatus('Ready');
     console.log('[Shiira] Initialization complete');
@@ -201,7 +226,7 @@ class ShiiraBrowser {
     // Create webview for OAuth flow
     const webview = document.createElement('webview');
     webview.id = 'oauth-webview';
-    webview.setAttribute('partition', 'persist:main');
+    webview.setAttribute('partition', this.tabs.find(t => t.id === this.activeTabId)?.webview?.getAttribute('partition') || this.partitionForProfile(this.profileForSpace()));
     webview.setAttribute('webpreferences', 'contextIsolation=yes,devTools=no,plugins=yes,backgroundThrottling=no,v8CacheOptions=bypassHeatCheckAndEagerCompile');
     webview.src = url;
     
@@ -931,6 +956,7 @@ class ShiiraBrowser {
   // Spaces, pinned tabs and favorites always come back (spaces.json).
   // Today tabs come back only with "Continue where you left off" (session.dat). All of them start asleep.
   async restoreSession() {
+    if (this.isLittle) { await this.loadProfiles(); this.spacesLoaded = true; this.spacesReadOnly = true; return null; }
     await this.loadSpaces();
     try {
       if (localStorage.getItem('shiira-restore-session') === 'false') {
@@ -979,6 +1005,8 @@ class ShiiraBrowser {
   }
 
   async saveSession() {
+    if (this.isLittle) return false;
+    if (this.flushWorkspace && !await this.flushWorkspace()) return false;
     try {
       // Spaces and pinned tabs are saved whatever the restore setting is.
       await this.saveSpacesNow?.();
@@ -1045,13 +1073,15 @@ class ShiiraBrowser {
         
         // Save session and then close
         this.saveSession()
-          .then(() => {
+          .then((saved) => {
+            if (saved === false && this.workspaceDirty) { isClosing = false; this.workspacePanel?.classList.remove('hidden'); return; }
             console.log('[Session] Save complete, closing window...');
             // Now actually close the window
             window.shiiraAPI.close();
           })
           .catch(err => {
             console.error('[Session] Save failed on close:', err);
+            if (this.workspaceDirty) { isClosing = false; this.workspacePanel?.classList.remove('hidden'); return; }
             // Close anyway
             window.shiiraAPI.close();
           });
@@ -1093,6 +1123,17 @@ applyMixin(ShiiraBrowser, CommandBarMixin);        // Command bar (Ctrl+T)
 applyMixin(ShiiraBrowser, SplitPeekMixin);         // Split view and Peek
 applyMixin(ShiiraBrowser, ExtensionsMixin);        // Chrome extensions
 applyMixin(ShiiraBrowser, HomeSearchMixin);        // Native Brave/Scira/DuckDuckGo search results
+applyMixin(ShiiraBrowser, BrowserImportMixin);     // Browser and HTML bookmark migration
+applyMixin(ShiiraBrowser, TabSwitcherMixin);       // Most-recently-used Ctrl+Tab
+applyMixin(ShiiraBrowser, PageToolsMixin);         // Capture, developer mode and automatic PiP
+applyMixin(ShiiraBrowser, BoostsMixin);            // Site CSS and Zap
+applyMixin(ShiiraBrowser, MiniPlayerMixin);        // Background transport controls
+applyMixin(ShiiraBrowser, ShortcutSettingsMixin);  // Remappable browser commands
+applyMixin(ShiiraBrowser, ExternalLinksMixin);     // External routing and transient windows
+applyMixin(ShiiraBrowser, SidebarSyncMixin);
+applyMixin(ShiiraBrowser, ProfilesMixin);
+applyMixin(ShiiraBrowser, WorkspaceMixin);
+applyMixin(ShiiraBrowser, EaselEditorMixin);
 
 // Start the browser
 console.log('[Shiira] Creating browser instance...');

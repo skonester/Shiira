@@ -49,7 +49,6 @@ if (phase === 'cleanup') {
     clearTimeout(deadline);
     if (phase === 'read' || error) await cleanup().catch(() => {});
     fs.writeFileSync(path.join(root, `settings-${phase}.json`), JSON.stringify({ success: !error, phase, error: error?.stack, nativeKeychain: true, requests }, null, 2));
-    BrowserWindow.getAllWindows().forEach(win => win.destroy());
     app.exit(error ? 1 : 0);
   }
   async function waitFor(win, expression) {
@@ -76,7 +75,7 @@ if (phase === 'cleanup') {
     try {
       let win;
       for (let n = 0; n < 100; n++) {
-        win = BrowserWindow.getAllWindows()[0];
+        win = BrowserWindow.getAllWindows().find(window => window.webContents.getLastWebPreferences().webviewTag);
         if (win && await win.webContents.executeJavaScript('Boolean(window.ShiiraBrowser?.spacesLoaded && window.ShiiraBrowser.activeTabId)').catch(() => false)) break;
         await delay(100);
       }

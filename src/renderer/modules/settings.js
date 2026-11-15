@@ -171,7 +171,7 @@ export const SettingsMixin = {
       else this.setWelcomeStep(this.setupStep + 1);
     });
     document.getElementById('setup-skip')?.addEventListener('click', () => this.finishWelcomeSetup());
-    if (localStorage.getItem('shiira-welcome-complete') !== 'true') this.showWelcomeSetup();
+    if (!this.isLittle && localStorage.getItem('shiira-welcome-complete') !== 'true') this.showWelcomeSetup();
   },
 
   showSettings(section = 'general') {
@@ -223,9 +223,10 @@ export const SettingsMixin = {
     void this.loadSearchCredentials();
   },
 
-  hideSettings() { this.settingsModal?.classList.add('hidden'); },
+  hideSettings() { this.settingsModal?.classList.add('hidden'); void this.cancelShortcutRecording?.(false); },
 
   selectSettingsSection(section) {
+    if (section !== 'shortcuts') void this.cancelShortcutRecording?.(false);
     document.querySelectorAll('[data-settings-section]').forEach(button => {
       button.classList.toggle('active', button.dataset.settingsSection === section);
     });
@@ -234,6 +235,8 @@ export const SettingsMixin = {
     });
     if (section === 'permissions') void this.renderSitePermissions();
     if (section === 'extensions') void this.refreshExtensions?.().then(() => this.renderExtensionSettings?.());
+    if (section === 'shortcuts') void this.loadShortcutSettings?.();
+    if (section === 'links') void this.loadRoutingSettings?.();
   },
 
   searchSettings() {
@@ -297,16 +300,17 @@ export const SettingsMixin = {
   async clearDataFromSettings() {
     const kind = document.getElementById('settings-clear-kind').value;
     const labels = { cache: 'cached files', cookies: 'cookies', 'cookies-and-cache': 'cookies and cached files', storage: 'site storage' };
-    const confirmed = await this.showConfirmation('Clear browsing data', `Clear ${labels[kind]}?`, { danger: true, confirmText: 'Clear' });
+    const confirmed = await this.showConfirmation('Clear browsing data', `Clear ${labels[kind]} in all browser profiles?`, { danger: true, confirmText: 'Clear' });
     if (!confirmed) return;
     const result = await window.shiiraAPI.privacy.clearBrowsingData(kind);
     setStatus('settings-privacy-status', result?.success ? `Cleared ${labels[kind]}.` : result?.error || 'Could not clear browsing data.');
   },
 
   async clearHistoryFromSettings() {
-    const confirmed = await this.showConfirmation('Clear browsing history', 'Remove all saved browsing history?', { danger: true, confirmText: 'Clear history' });
+    const confirmed = await this.showConfirmation('Clear browsing history', 'Remove saved browsing history for this browser profile?', { danger: true, confirmText: 'Clear history' });
     if (!confirmed) return;
-    this.browsingHistory = [];
+    const profileId = this.profileForSpace?.() || 'default';
+    this.browsingHistory = this.browsingHistory.filter(item => (item.profileId || 'default') !== profileId);
     this.saveBrowsingHistory();
     this.renderHistoryList();
     setStatus('settings-privacy-status', 'Browsing history cleared.');

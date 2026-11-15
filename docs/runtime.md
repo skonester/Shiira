@@ -4,6 +4,31 @@ Shiira uses **Castlabs Electron 45.2.1+wvcus**, embedding **Chromium 156.0.8078.
 
 Electron 39 / Chromium 142 is out of support. Updating a user-agent string cannot update the browser engine or install security fixes. The engine changes when a new Shiira binary is built and distributed.
 
+## Startup
+
+The application entry point is `src/main/bootstrap.js`. It enables Node's V8
+compile cache before loading `main.js` and its dependencies. CommonJS and ES
+modules reuse cached bytecode on subsequent launches. Cache files live under
+`v8-compile-cache` in Shiira's user-data directory. Node handles source changes
+and runtime-version separation. An unavailable cache directory allows normal
+startup to continue. This uses the runtime's existing cross-platform cache
+support. [Node compile cache documentation](https://nodejs.org/api/module.html#module-compile-cache)
+
+As soon as Electron is ready, a small splash window loads the bundled Shiira
+logo and local HTML/CSS. The browser stays hidden until it has painted and the
+renderer has selected its initial tab. The splash closes during that handoff.
+Closing it cancels startup. A renderer failure exposes the browser window for
+recovery. The 15-second readiness timeout permits handoff after the first paint;
+it cannot expose an unpainted document. The UI preload sets a dark document
+canvas before renderer initialization, and the optional Google Fonts stylesheet
+is activated after initial readiness so font networking cannot block that paint.
+
+Graphics startup uses Chromium's normal backend and driver restrictions.
+Shiira no longer forces ANGLE/Vulkan, zero-copy/native GPU buffers, experimental
+WebGPU, or a GPU blocklist bypass on every platform. A GPU vendor name does not
+establish that a particular backend is supported. This removes a compatibility
+hazard; visual confirmation of the reported white home surface is still needed.
+
 ## Keeping security fixes current
 
 [Electron supports its latest three stable major versions](https://www.electronjs.org/docs/latest/tutorial/electron-timelines). [Castlabs supports those branches on a best-effort basis and normally produces one build per branch per month](https://github.com/castlabs/electron-releases/wiki). Check [Castlabs releases](https://github.com/castlabs/electron-releases/releases) and [upstream Electron releases](https://releases.electronjs.org/) at least weekly, and immediately after a Chromium security advisory. Adopt stable patch releases promptly, and move to each new supported stable major after compatibility checks.
@@ -15,7 +40,7 @@ As of the verification date, upstream Electron is already at **45.3.2 / Chromium
 1. Select the newest stable Castlabs release and read [Electron's breaking changes](https://www.electronjs.org/docs/latest/breaking-changes) for every intervening major.
 2. Update the `electron` development dependency using its exact Castlabs Git tag and regenerate the lockfile with npm. Preserve the SQLite `gypfile: false` lockfile workaround described below. Set `build.electronVersion` to the matching upstream version, without `+wvcus`, and update the Chromium target in `build/preloads.js`.
 3. Install from the lockfile with `npm ci`, then explicitly download the runtime with `node node_modules/electron/install.js`. Electron 42+ otherwise downloads on first use.
-4. Run `npm test` and the Electron smoke tests: `test:runtime:electron`, `test:arc:electron`, `test:search:electron`, `test:settings:electron`, `test:scira:website:electron`, and `test:youtube:electron`. These use temporary browser profiles. The runtime test checks encrypted SQLite password storage, the sandboxed clipboard bridge, and a local MV3 extension without changing the OS clipboard.
+4. Run `npm test` and the Electron smoke tests: `test:runtime:electron`, `test:clipboard:electron`, `test:arc:electron`, `test:search:electron`, `test:settings:electron`, `test:scira:website:electron`, and `test:youtube:electron`. These use temporary browser profiles. The runtime test checks encrypted SQLite password storage, the sandboxed clipboard bridge, and a local MV3 extension without changing the OS clipboard. The clipboard test briefly opens a browser window and exercises real keyboard and right-click editing in browser chrome, regular tabs, and private tabs. It snapshots the OS clipboard before editing and restores it before exiting, including on test failures.
 5. Build each supported platform, verify the runtime reported by the packaged browser, and test ordinary browsing, installed extensions, profile persistence, downloads, and DRM playback. Paid streaming services also depend on production Widevine/VMP signing and their own policies; fixture video tests cannot verify those services.
 6. Bump Shiira's application version and distribute a new release through the existing release/update workflow. Dependency changes alone do not upgrade already-installed browsers.
 
@@ -30,3 +55,13 @@ To verify the Windows package with the same isolated runtime smoke test, set `SH
 The Electron 44 clipboard migration uses asynchronous `ClipboardItem`/`Blob` writes for Copy image. Sandboxed preloads use bundled browser code and Electron's bridge; they cannot depend on the Node shims removed in Electron 45.
 
 This runtime requires macOS 13 or newer. Electron 44+ removed Windows ia32 and Linux armv7l support; build x64 or arm64 instead. The separate `installer/` project is a legacy installer UI with its own Electron dependency and is not built by the current release workflow.
+
+## Clipboard regression checks
+
+[Electron 44 made clipboard reads and writes asynchronous and moved the Electron clipboard API to the main process](https://www.electronjs.org/blog/electron-44-0). The browser-chrome IPC bridge must await `clipboard.writeText()` before acknowledging a copy, and propagate write failures. Its tests deliberately delay and reject writes; synchronous mocks hide this upgrade error.
+
+Text menus must release their full-window overlay on actions, outside clicks, and Escape. Closing animations cannot intercept clicks, and a completed clipboard request cannot dismiss a newly opened menu. The native smoke test checks partial selections and repeated menu use. Website editing commands force a fresh guest focus transition because clicking a menu in browser chrome can move native focus while leaving the webview DOM element active. A plain `focus()` call can therefore do nothing on the second action.
+
+Both event loops are monitored during native clipboard tests. A click-blocking overlay or lost guest focus can look like a hung main thread even while its event loop keeps running. These tests distinguish those failures from an actual event-loop stall; they do not establish responsiveness for every site or graphics configuration.
+
+Verified on Windows with Castlabs Electron 45.2.1 on November 14, 2026: all 168 unit tests and all seven Electron smoke suites passed. The native clipboard test restored the original clipboard contents. These were source launches; a newly packaged release was not tested in this audit.
