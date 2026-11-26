@@ -174,6 +174,8 @@ export const TabManagerMixin = {
 
   createTabWebview(tabId, privateMode = false, profileId = null) {
     const webview = document.createElement('webview');
+    // Main-process policy decides which requests become native site popups.
+    webview.setAttribute('allowpopups', '');
     webview.id = tabId;
     const tab = this.tabs.find(t => t.id === tabId);
     const profile = profileId || this.profileForTab?.(tab) || 'default';

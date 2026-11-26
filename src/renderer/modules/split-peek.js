@@ -171,6 +171,7 @@ export const SplitPeekMixin = {
     const source = this.tabs.find(tab => tab.id === sourceTabId);
     this.peekSource = { spaceId: source?.spaceId || this.focusedSpaceId, privateMode: source?.privateMode === true };
     const webview = document.createElement('webview');
+    webview.setAttribute('allowpopups', '');
     webview.className = 'peek-webview';
     webview.setAttribute('partition', source?.webview?.getAttribute('partition') || (source?.privateMode ? this.privatePartition(source.id) : this.partitionForProfile(this.profileForTab(source))));
     webview.setAttribute('webpreferences', WEBVIEW_PREFERENCES);
@@ -190,10 +191,6 @@ export const SplitPeekMixin = {
       } catch (error) {
         // Not attached yet.
       }
-    });
-    webview.addEventListener('new-window', (event) => {
-      event.preventDefault?.();
-      if (event.url && event.url !== 'about:blank') this.openLinkInTabOnce(event.url, sourceTabId);
     });
     webview.src = url;
     this.peekHost.replaceChildren(webview);

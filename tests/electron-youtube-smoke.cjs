@@ -65,7 +65,7 @@ YouTubeService.prototype.createInnertube = async function (options) {
     const queryRange = new URL(url).searchParams.get('range');
     const requestedRange = queryRange ? `bytes=${queryRange}` : init.headers.Range;
     media.push({ videoId, language: new URL(url).searchParams.get('language'), client: init.headers['User-Agent'], range: requestedRange, method: init.method, time: Date.now() });
-    if (failMedia && init.headers['User-Agent'] === 'VISIONOS') return new Response('', { status: 403 });
+    if (failMedia && init.headers['User-Agent'] === 'WEB') return new Response('', { status: 403 });
     if (timeoutSource && videoId === 'timeoutvid1') return new Promise((_, reject) => {
       init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true });
     });
@@ -97,6 +97,13 @@ YouTubeService.prototype.createInnertube = async function (options) {
 const originalPlaying = YouTubeService.prototype.notePlaying;
 const originalLoad = YouTubeService.prototype.load;
 YouTubeService.prototype.load = async function (...args) {
+  // The fixture serves DASH files for every client. VISIONOS and IOS only play
+  // HLS, so start each tab's routes at the DASH-capable WEB client, as a real
+  // response without an Apple HLS manifest would.
+  if (mode !== 'live' && !this.fixtureOrder) {
+    this.fixtureOrder = true;
+    this.order = [...this.order.filter(client => !['VISIONOS', 'IOS'].includes(client)), 'VISIONOS', 'IOS'];
+  }
   try {
     const source = await originalLoad.apply(this, args);
     if (mode === 'live') liveDiagnostics.push({ phase: 'resolved', client: source.client, kind: source.kind, attempts: source.attempts });
@@ -343,15 +350,15 @@ app.whenReady().then(async () => {
     // Recover a refused media URL onto a different client without looping.
     failMedia = true;
     await guest.executeJavaScript("history.pushState({},'', '/watch?v=recovervid1');document.dispatchEvent(new Event('yt-navigate-finish'));");
-    await waitForDecoded(guest, () => plays.some(p => p.id === 'recovervid1' && p.client !== 'VISIONOS'), '403 source recovery');
-    const refused = media.filter(value => value.videoId === 'recovervid1' && value.client === 'VISIONOS');
+    await waitForDecoded(guest, () => plays.some(p => p.id === 'recovervid1' && p.client !== 'WEB'), '403 source recovery');
+    const refused = media.filter(value => value.videoId === 'recovervid1' && value.client === 'WEB');
     assert.ok(refused.some(value => value.method === 'POST'), 'same-source compatibility transport runs before client recovery');
     assert.ok(diagnostics.some(value => value.stage === 'media_wait' && value.attempt === 2), 'same-source readiness probes reach the deadline');
-    assert.ok(resolves.find(value => value.id === 'recovervid1' && value.client === 'WEB').time - refused[0].time >= 1000);
+    assert.ok(resolves.find(value => value.id === 'recovervid1' && value.client === 'WEB_EMBEDDED').time - refused[0].time >= 1000);
     failMedia = false;
     await guest.executeJavaScript("history.pushState({},'', '/watch?v=timeoutvid1');document.dispatchEvent(new Event('yt-navigate-finish'));");
     await waitForDecoded(guest, () => plays.some(p => p.id === 'timeoutvid1'), 'transport timeout recovery');
-    assert.deepEqual(resolves.filter(value => value.id === 'timeoutvid1').map(value => value.client), ['VISIONOS', 'VISIONOS'],
+    assert.deepEqual(resolves.filter(value => value.id === 'timeoutvid1').map(value => value.client), ['WEB', 'WEB'],
       'a transport timeout retries the same client without deferral');
     assert.ok(diagnostics.some(value => value.stage === 'media_failed' && value.code === 'TIMEOUT'));
     await guest.executeJavaScript("history.pushState({},'', '/watch?v=slowvideo01');document.dispatchEvent(new Event('yt-navigate-finish'));");

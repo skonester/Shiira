@@ -1,5 +1,7 @@
 const { app, BrowserWindow, ipcMain, session, protocol, nativeImage, Menu, dialog, clipboard, ClipboardItem, shell, net, webContents } = require('electron');
 app.setName('Shiira');
+const { configureBrowserRuntime, isSitePopup, sitePopupResponse, withoutAutomationIndicator } = require('./browser-compatibility');
+configureBrowserRuntime(app);
 const { createStartupSplash } = require('./startup');
 const { installYouTubePlayback } = require('./youtube-playback');
 const log = require('electron-log');
@@ -166,22 +168,12 @@ function installBrowserHeaderOverrides(sessionInstance) {
   if (browserHeaderSessions.has(sessionInstance)) return;
   browserHeaderSessions.add(sessionInstance);
 
-  const chromeMajor = String(process.versions.chrome || '').split('.')[0] || '120';
-  const browserHeaders = {
-    'User-Agent': SHIIRA_CONFIG.userAgent,
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Sec-CH-UA': `"Google Chrome";v="${chromeMajor}", "Chromium";v="${chromeMajor}", "Not.A/Brand";v="99"`,
-    'Sec-CH-UA-Mobile': '?0',
-    'Sec-CH-UA-Platform': '"Windows"'
-  };
-
   sessionInstance.webRequest.onBeforeSendHeaders(
     { urls: ['http://*/*', 'https://*/*'] },
     (details, callback) => {
-      let requestHeaders = {
-        ...details.requestHeaders,
-        ...browserHeaders
-      };
+      // The session supplies the browser UA. Let Chromium generate matching
+      // client hints and language headers instead of claiming a fixed OS/brand.
+      let requestHeaders = details.requestHeaders;
 
       if (dnsShield.isEnabled()) {
         requestHeaders = dnsShield.getPrivacyHeaders(details, requestHeaders);
@@ -255,6 +247,7 @@ let mainWindow = null;
 
 // Track all open browser windows for session management
 const browserWindows = new Set();
+const sitePopupOwners = new WeakMap();
 let externalLinks = null;
 externalLinks = new (require('./external-links-service').ExternalLinksService)({ app, ipcMain, BrowserWindow, isTrusted: isBrowserChromeSender,
   getSpaces: () => spacesService.load()?.spaces || [],
@@ -404,37 +397,31 @@ function handleKeyboardShortcut(event, input, targetWindow) {
   targetWindow.webContents.send('keyboard-shortcut', shortcut);
 }
 
-function isOAuthPopupUrl(url, features = '', disposition = '') {
-  return features.includes('popup') ||
-    url.includes('oauth') ||
-    url.includes('accounts.google.com') ||
-    url.includes('login.microsoftonline.com') ||
-    url.includes('facebook.com/login') ||
-    url.includes('github.com/login') ||
-    (url.includes('auth') && (features.includes('width=') || features.includes('height=')));
+function browsingWindow(contents) {
+  return sitePopupOwners.get(contents) || BrowserWindow.fromWebContents(contents.hostWebContents || contents);
 }
 
 function routeWindowOpen(contents, details = {}) {
-  const { url, frameName, features = '', disposition = '' } = details;
-  console.log('[WebContents] Window open requested:', { url, frameName, features, disposition });
+  const { url } = details;
 
   if (!url) {
     return { action: 'deny' };
   }
 
-  const parentWindow = BrowserWindow.fromWebContents(contents.hostWebContents || contents);
+  const parentWindow = browsingWindow(contents);
   if (!parentWindow || parentWindow.isDestroyed()) {
     return { action: 'deny' };
   }
 
-  if (externalLinks?.isLittle(parentWindow) && !isOAuthPopupUrl(url, features, disposition)) {
-    void externalLinks.openMain(url);
-    return { action: 'deny' };
+  const page = contents.getType() === 'webview' || sitePopupOwners.has(contents);
+  if (page && isSitePopup(details)) {
+    // Electron must create the original window: recreating its URL in a
+    // webview loses the WindowProxy, opener, referrer and form POST body.
+    return sitePopupResponse(contents, parentWindow);
   }
 
-  if (isOAuthPopupUrl(url, features, disposition)) {
-    console.log('[WebContents] OAuth/SSO popup routed to in-app modal');
-    parentWindow.webContents.send('show-oauth-modal', url);
+  if (externalLinks?.isLittle(parentWindow)) {
+    void externalLinks.openMain(url);
     return { action: 'deny' };
   }
 
@@ -517,19 +504,23 @@ app.on('web-contents-created', (event, contents) => {
     contents.setWindowOpenHandler((details) => routeWindowOpen(contents, details));
   }
 
-  contents.on('will-create-window', (event, details) => {
-    event.preventDefault();
-    routeWindowOpen(contents, details);
+  contents.on('did-create-window', popup => {
+    const owner = browsingWindow(contents);
+    if (!owner || owner.isDestroyed()) { popup.destroy(); return; }
+    const popupContents = popup.webContents;
+    sitePopupOwners.set(popupContents, owner);
+    configurePageSession(popup.webContents.session);
+    popup.setMenu(null);
+    // The native title is controlled by browser code so the current address
+    // remains visible even when the identity provider changes its page title.
+    const updateTitle = () => {
+      if (!popup.isDestroyed()) popup.setTitle(`${popup.webContents.getURL() || 'about:blank'} — Shiira`);
+    };
+    popup.on('page-title-updated', event => { event.preventDefault(); updateTitle(); });
+    popup.webContents.on('did-navigate', updateTitle);
+    popup.webContents.on('did-navigate-in-page', updateTitle);
+    popup.once('closed', () => sitePopupOwners.delete(popupContents));
   });
-
-  // Handle popup windows created by setWindowOpenHandler
-  if (contents.getType() === 'window') {
-    const popupWindow = BrowserWindow.fromWebContents(contents);
-    popupWindow?.hide();
-    popupWindow?.destroy();
-    console.log('[Popup] Blocked native Electron popup window');
-    return;
-  }
   
   // Only handle webview webContents
   if (contents.getType() === 'webview') {
@@ -625,10 +616,8 @@ function createWindow(startupSplash) {
     });
   }
 
-  // Set custom user agent - use standard Chrome UA for DRM compatibility
-  // Netflix/Disney+ detect non-standard browsers and block DRM playback
-  const chromeVersion = process.versions.chrome;
-  SHIIRA_CONFIG.userAgent = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
+  // Same Chromium identity for normal pages, profile sessions and popups.
+  SHIIRA_CONFIG.userAgent = app.userAgentFallback;
   session.defaultSession.setUserAgent(SHIIRA_CONFIG.userAgent);
 
   // Runtime cache for temporary permissions (cleared on restart)
@@ -716,7 +705,7 @@ function createWindow(startupSplash) {
         console.log(`[Permissions] 🔒 Requesting '${specificPermission}' permission from ${hostname}`);
         
         // Find the window that owns this webContents
-        const window = BrowserWindow.fromWebContents(webContents.hostWebContents || webContents);
+        const window = browsingWindow(webContents);
         if (window && !window.isDestroyed()) {
           try {
             // Send permission request to renderer and wait for response
@@ -882,6 +871,7 @@ function installWebviewPreload(window) {
     webPreferences.nodeIntegration = false;
     webPreferences.contextIsolation = true;
     webPreferences.sandbox = true;
+    webPreferences.disableBlinkFeatures = withoutAutomationIndicator(webPreferences.disableBlinkFeatures);
   });
 }
 

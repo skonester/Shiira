@@ -136,15 +136,6 @@ export const WebviewEventsMixin = {
       }
     });
     
-    webview.addEventListener('new-window', (e) => {
-      console.log('[Webview] New window event:', e.url, e.disposition);
-      e.preventDefault?.();
-      
-      if (e.url && e.url !== 'about:blank') {
-        self.openLinkInTabOnce(e.url, tabId);
-      }
-    });
-    
     webview.addEventListener('context-menu', (e) => {
       self.showWebviewContextMenu(e, webview);
     });

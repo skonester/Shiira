@@ -1,14 +1,27 @@
 // Adapted from Litube's Extractor.kt / MscPlayback.kt and MediaServiceCore's
 // PlayerClientQueues.kt. See THIRD_PARTY_NOTICES/litube-GPL-3.0-NOTICE.txt.
+// Apple-client HLS selection and visitor handling follow Stream Tube's
+// src/api/streams.rs. See THIRD_PARTY_NOTICES/stream-tube-MIT.txt.
 const { createHash, randomUUID } = require('node:crypto');
 const timers = require('node:timers/promises');
 const { isMediaUrl } = require('../shared/youtube');
 
-// WEB_SAFARI is a WEB request with Safari identity, as in MSC PlayerRequest.kt.
-// IOS remains an additional fallback, not a substitute for that route.
-const CLIENTS = ['VISIONOS', 'WEB', 'WEB_EMBEDDED', 'WEB_SAFARI', 'IOS', 'TV', 'ANDROID_VR'];
+// The Apple clients come first: their HLS manifests need neither a PO token
+// nor the player solver, and they work signed out. WEB_SAFARI is a WEB request
+// with Safari identity, as in MSC PlayerRequest.kt.
+const CLIENTS = ['VISIONOS', 'IOS', 'WEB', 'WEB_EMBEDDED', 'WEB_SAFARI', 'TV', 'ANDROID_VR'];
 const SAFARI_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15,gzip(gfe)';
 const DIRECT_CLIENTS = new Set(['VISIONOS', 'IOS', 'ANDROID_VR']);
+// Without a PO token YouTube cuts these clients' adaptive URLs off after about
+// 1 MB, which surfaces as 403s once playback or a seek leaves the first chunk.
+// Their HLS manifest is the only usable stream, so DASH is never built for them.
+const HLS_ONLY_CLIENTS = new Set(['VISIONOS', 'IOS']);
+// A server-issued visitor ID makes "confirm you're not a bot" answers far less
+// likely than a locally generated one. iOS is the exception (see getInfo).
+const SERVER_VISITOR_CLIENTS = new Set(['VISIONOS', 'ANDROID_VR']);
+const VISITOR_TTL_MS = 6 * 3600 * 1000;
+const IOS_VISITOR_ATTEMPTS = 5;
+const validVisitor = value => typeof value === 'string' && value.length > 0 && value.length <= 512 && /^[\w%=-]+$/.test(value);
 const MEDIA_TIMEOUT_MS = 20000;
 const MAX_MEDIA_WAIT_MS = 30000;
 const FAILURE_CODES = new Set(['TIMEOUT', 'VERIFICATION_REQUIRED', 'NO_STREAM', 'SOLVER_FAILED', 'SOLVER_UNAVAILABLE', 'FAILED', 'UNPLAYABLE',
@@ -89,6 +102,17 @@ function usableFormat(format) {
     range(format.init_range) && range(format.index_range) && isMediaUrl(url);
 }
 
+// YouTube names every HLS segment seg.ts and serves it as octet-stream, whether
+// it is MPEG-TS, fMP4 or packed ADTS AAC. Shaka guesses a segment container
+// from its URI or content type and otherwise assumes MP4, which leaves packed
+// audio in an MP4 buffer that never initializes. fMP4 keeps the generic type.
+function hlsSegmentType(data) {
+  if (data.length >= 3 && data[0] === 0x49 && data[1] === 0x44 && data[2] === 0x33) return 'audio/aac'; // ID3 timestamp tag
+  if (data.length >= 2 && data[0] === 0xff && (data[1] & 0xf6) === 0xf0) return 'audio/aac'; // ADTS sync word
+  if (data.length >= 189 && data[0] === 0x47 && data[188] === 0x47) return 'video/mp2t';
+  return null;
+}
+
 function decodeManifestUrl(value) {
   return value.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 }
@@ -132,6 +156,33 @@ class YouTubeService {
     this.solutions = new Map();
     this.resolutionController = new AbortController();
     this.disposed = false;
+    this.visitor = null;
+    this.iosVisitor = '';
+  }
+
+  // Anonymous visitor ID from YouTube's own endpoint, shared by this tab's
+  // direct clients for six hours. A failure falls back to YouTube.js's local one.
+  visitorData(request, webVersion) {
+    if (this.visitor?.expires > this.now()) return this.visitor.value;
+    const pending = (async () => {
+      const response = await request('https://www.youtube.com/youtubei/v1/visitor_id?prettyPrint=false', {
+        method: 'POST', credentials: 'omit',
+        headers: { 'Content-Type': 'application/json', Origin: 'https://www.youtube.com' },
+        body: JSON.stringify({ context: { client: { clientName: 'WEB', clientVersion: webVersion, hl: 'en', gl: 'US' } } })
+      });
+      if (!response.ok) throw new Error('Visitor request failed');
+      const value = (await response.json())?.responseContext?.visitorData;
+      if (!validVisitor(value)) throw new Error('Invalid visitor data');
+      return value;
+    })().then(value => {
+      if (this.visitor?.value === pending) this.visitor = { value, expires: this.now() + VISITOR_TTL_MS };
+      return value;
+    }, () => {
+      if (this.visitor?.value === pending) this.visitor = null;
+      return '';
+    });
+    this.visitor = { value: pending, expires: Infinity };
+    return pending;
   }
 
   diagnose(stage, fields) {
@@ -174,13 +225,20 @@ class YouTubeService {
     // Execute the extracted solver only in a separate, sandboxed Chromium page.
     // YouTube code must never be evaluated in Electron's privileged main process.
     Platform.shim.eval = data => this.evaluateScript(data.output);
-    const request = (input, init = {}) => this.fetchImpl(input, {
-      ...init, signal: AbortSignal.any([signal, ...(init.signal ? [init.signal] : []), AbortSignal.timeout(this.attemptMs)])
-    });
+    const request = (input, init = {}) => {
+      // A request made without a visitor must not announce an empty one.
+      if (typeof init.headers?.get === 'function' && init.headers.get('x-goog-visitor-id') === '') init.headers.delete('x-goog-visitor-id');
+      return this.fetchImpl(input, {
+        ...init, signal: AbortSignal.any([signal, ...(init.signal ? [init.signal] : []), AbortSignal.timeout(this.attemptMs)])
+      });
+    };
+    const visitor = SERVER_VISITOR_CLIENTS.has(client) ? await this.visitorData(request, Constants.CLIENTS.WEB.VERSION) : '';
+    signal.throwIfAborted();
     const api = await Innertube.create({
       fetch: request, cookie: DIRECT_CLIENTS.has(client) ? undefined : cookie || undefined,
       retrieve_player: false, retrieve_innertube_config: false,
       generate_session_locally: true, enable_session_cache: false, lang: 'en', location: 'US',
+      ...(visitor ? { visitor_data: visitor } : {}),
       ...(userAgent ? { user_agent: userAgent } : {})
     });
     if (client === 'WEB_SAFARI') Object.assign(api.session.context.client, {
@@ -200,7 +258,7 @@ class YouTubeService {
         }
         // Keep the raw answer's readiness estimate, which YouTube.js omits from
         // VideoInfo. Use the same player payload and parser as getBasicInfo().
-        const response = await api.actions.execute('/player', {
+        const player = () => api.actions.execute('/player', {
           videoId, client: client === 'WEB_SAFARI' ? 'WEB' : client, racyCheckOk: true, contentCheckOk: true,
           playbackContext: { contentPlaybackContext: {
             vis: 0, splay: false, lactMilliseconds: '-1',
@@ -208,12 +266,37 @@ class YouTubeService {
           } },
           ...(api.session.po_token ? { serviceIntegrityDimensions: { poToken: api.session.po_token } } : {})
         });
+        let response;
+        if (client === 'IOS') {
+          // iOS leaves the HLS manifest out for visitors in YouTube's SABR-only
+          // experiment. Alternate a visitor that worked before with fresh
+          // server-assigned ones, and keep the first fresh one that works.
+          for (let attempt = 0; attempt < IOS_VISITOR_ATTEMPTS; attempt++) {
+            const kept = this.iosVisitor;
+            const visitor = attempt % 2 === 0 ? kept : '';
+            if (visitor) api.session.context.client.visitorData = visitor;
+            else delete api.session.context.client.visitorData;
+            response = await player();
+            const answer = response.data;
+            if (answer?.streamingData?.hlsManifestUrl) {
+              const assigned = answer.responseContext?.visitorData;
+              if (!visitor && validVisitor(assigned)) this.iosVisitor = assigned;
+              break;
+            }
+            if (kept && visitor === kept && attempt >= 2) this.iosVisitor = '';
+            if (answer?.playabilityStatus?.status !== 'OK') break;
+          }
+        } else {
+          response = await player();
+        }
         const availableAt = mediaAvailableAt(response.data, this.now());
         const info = new YT.VideoInfo([response], api.actions, Utils.generateRandomString(16));
         info.mediaAvailableAt = availableAt;
         // A direct client normally avoids the web solver. If its URLs contain
         // n/signature challenges, solve those before exposing any media URL.
-        const formats = [...(info.streaming_data?.adaptive_formats || []), ...(info.streaming_data?.formats || [])];
+        // HLS-only clients never expose their adaptive URLs, so skip them.
+        const formats = HLS_ONLY_CLIENTS.has(client) ? []
+          : [...(info.streaming_data?.adaptive_formats || []), ...(info.streaming_data?.formats || [])];
         if (formats.some((format) => format.signature_cipher || format.cipher ||
           (format.url && new URL(format.url).searchParams.has('n')))) {
           await preparePlayer();
@@ -324,7 +407,8 @@ class YouTubeService {
             boundExpiry(source, stream.hls_manifest_url, this.now());
             return { ...source, kind: 'hls', url: stream.hls_manifest_url };
           };
-          if ((source.live || client === 'WEB_SAFARI') && isMediaUrl(stream.hls_manifest_url)) return hlsSource();
+          if ((source.live || client === 'WEB_SAFARI' || HLS_ONLY_CLIENTS.has(client)) && isMediaUrl(stream.hls_manifest_url)) return hlsSource();
+          if (HLS_ONLY_CLIENTS.has(client)) throw Object.assign(new Error('Client offered no HLS manifest'), { code: 'NO_STREAM' });
           // DASH keeps the complete audio/video pool for adaptive selection. SABR,
           // DRM, and OTF formats are not sources this player can consume.
           const formats = (stream.adaptive_formats || []).filter(usableFormat);
@@ -475,6 +559,7 @@ class YouTubeService {
         throw new Error(`YouTube media HTTP ${response.status}`);
       }
       const type = response.headers.get('content-type') || '';
+      let contentType = type;
       if (/text\/html|application\/(?:[^;]+\+)?json/i.test(type) || !response.body) {
         this.noteMediaRejected(route.source);
         this.diagnose('media_failed', { client: route.source.client, code: 'INVALID_BODY', method });
@@ -506,12 +591,14 @@ class YouTubeService {
           return line.trim() ? this.registerUrl(new URL(line.trim(), target).href, route.source) : line;
         }).join('\n');
         data = new TextEncoder().encode(playlist);
+      } else if (route.source.kind === 'hls') {
+        contentType = hlsSegmentType(data) || type;
       }
       controller.signal.throwIfAborted();
       if (method === 'POST') route.usePost = true;
       bytes = size;
       outcome = 'completed';
-      return { data, headers: { 'content-type': type }, uri };
+      return { data, headers: { 'content-type': contentType }, uri };
     } catch (error) {
       if (controller.signal.aborted && !timedOut) outcome = 'cancelled';
       if (!reported && (!controller.signal.aborted || timedOut)) {
@@ -556,6 +643,8 @@ class YouTubeService {
     this.epochs.clear();
     this.deferred.clear();
     this.solutions.clear();
+    this.visitor = null;
+    this.iosVisitor = '';
   }
 }
 

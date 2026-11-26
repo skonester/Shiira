@@ -6,6 +6,11 @@ Electron 39 / Chromium 142 is out of support. Updating a user-agent string canno
 
 ## Startup
 
+Website login compatibility is applied before Electron is ready. Native
+site popups preserve the opener and the originating profile's session;
+[sign-in implementation and verification](site-sign-in.md) describe the
+startup defaults and authentication smoke test.
+
 The application entry point is `src/main/bootstrap.js`. It enables Node's V8
 compile cache before loading `main.js` and its dependencies. CommonJS and ES
 modules reuse cached bytecode on subsequent launches. Cache files live under

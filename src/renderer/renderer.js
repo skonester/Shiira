@@ -168,12 +168,6 @@ class ShiiraBrowser {
       }
     });
     
-    // Listen for OAuth modal requests
-    window.shiiraAPI.onShowOAuthModal((url) => {
-      console.log('[Shiira] Showing OAuth modal for:', url);
-      this.showOAuthModal(url);
-    });
-    
     // Defer slow startup work until after the first paint.
     requestAnimationFrame(() => {
       void this.loadStartupInfo();
@@ -209,109 +203,6 @@ class ShiiraBrowser {
     } catch (error) {
       console.error('[Renderer] Failed to load app info:', error);
     }
-  }
-
-  /**
-   * Show OAuth modal with webview
-   */
-  showOAuthModal(url) {
-    console.log('[OAuth] Opening modal for:', url);
-    const overlay = document.getElementById('oauth-modal-overlay');
-    const container = document.getElementById('oauth-webview-container');
-    const closeBtn = document.getElementById('oauth-modal-close');
-    
-    // Clear any existing webview
-    container.innerHTML = '';
-    
-    // Create webview for OAuth flow
-    const webview = document.createElement('webview');
-    webview.id = 'oauth-webview';
-    webview.setAttribute('partition', this.tabs.find(t => t.id === this.activeTabId)?.webview?.getAttribute('partition') || this.partitionForProfile(this.profileForSpace()));
-    webview.setAttribute('webpreferences', 'contextIsolation=yes,devTools=no,plugins=yes,backgroundThrottling=no,v8CacheOptions=bypassHeatCheckAndEagerCompile');
-    webview.src = url;
-    
-    container.appendChild(webview);
-    overlay.classList.remove('hidden');
-    
-    console.log('[OAuth] Modal shown, webview created');
-    
-    // Close button handler
-    const closeHandler = () => {
-      console.log('[OAuth] Closing modal');
-      overlay.classList.add('hidden');
-      container.innerHTML = ''; // Clean up webview
-      closeBtn.removeEventListener('click', closeHandler);
-      overlay.removeEventListener('click', overlayClickHandler);
-    };
-    
-    // Click overlay to close
-    const overlayClickHandler = (e) => {
-      if (e.target === overlay) {
-        closeHandler();
-      }
-    };
-    
-    closeBtn.addEventListener('click', closeHandler);
-    overlay.addEventListener('click', overlayClickHandler);
-    
-    // Auto-close when OAuth completes (URL changes back to target site)
-    const self = this;
-    
-    // Inject password autofill on dom-ready (initial load)
-    webview.addEventListener('dom-ready', () => {
-      console.log('[OAuth] DOM ready, injecting password autofill');
-      const currentUrl = webview.getURL();
-      if (self.injectPasswordAutofill) {
-        self.injectPasswordAutofill(webview, currentUrl);
-      }
-      self.injectForcedDarkMode?.(webview, currentUrl);
-    });
-    
-    webview.addEventListener('did-navigate', (e) => {
-      console.log('[OAuth] Navigation:', e.url);
-      
-      // Inject password autofill for OAuth pages
-      if (self.injectPasswordAutofill) {
-        self.injectPasswordAutofill(webview, e.url);
-      }
-      self.injectForcedDarkMode?.(webview, e.url);
-      
-      // If we navigate back to the original site (not accounts.google.com etc), close modal
-      const navUrl = e.url;
-      if (!navUrl.includes('accounts.google.com') && 
-          !navUrl.includes('login.microsoftonline.com') &&
-          !navUrl.includes('facebook.com/login') &&
-          !navUrl.includes('github.com/login') &&
-          !navUrl.includes('oauth') &&
-          !navUrl.includes('auth')) {
-        console.log('[OAuth] Flow complete, closing modal');
-        setTimeout(() => closeHandler(), 1000); // Brief delay to see success
-      }
-    });
-    
-    // Also handle in-page navigation (SPA-style OAuth flows)
-    webview.addEventListener('did-navigate-in-page', (e) => {
-      if (e.isMainFrame) {
-        console.log('[OAuth] In-page navigation:', e.url);
-        if (self.injectPasswordAutofill) {
-          self.injectPasswordAutofill(webview, e.url);
-        }
-        self.injectForcedDarkMode?.(webview, e.url);
-      }
-    });
-    
-    // Debug logging
-    webview.addEventListener('did-start-loading', () => {
-      console.log('[OAuth] Webview started loading');
-    });
-    
-    webview.addEventListener('did-finish-load', () => {
-      console.log('[OAuth] Webview finished loading');
-    });
-    
-    webview.addEventListener('did-fail-load', (e) => {
-      console.error('[OAuth] Webview failed to load:', e);
-    });
   }
 
   cacheElements() {

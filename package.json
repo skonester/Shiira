@@ -1,6 +1,6 @@
 {
   "name": "shiira-browser",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Shiira - A super dark browser inspired by the classic Shiira project",
   "main": "src/main/bootstrap.js",
   "scripts": {
@@ -9,6 +9,7 @@
     "dev": "electron . --enable-logging",
     "test": "node --test tests/*.test.js",
     "test:runtime:electron": "node tests/run-electron-smoke.cjs runtime",
+    "test:auth:electron": "node tests/run-electron-smoke.cjs auth",
     "test:clipboard:electron": "node tests/run-electron-smoke.cjs clipboard",
     "test:arc:electron": "node tests/run-electron-smoke.cjs arc",
     "test:orbe:electron": "node tests/run-electron-smoke.cjs orbe",
@@ -56,7 +57,15 @@
     "electronDist": "node_modules/electron/dist",
     "electronVersion": "45.2.1",
     "npmRebuild": false,
-    "protocols": [{ "name": "Shiira Web Links", "schemes": ["http", "https"] }],
+    "protocols": [
+      {
+        "name": "Shiira Web Links",
+        "schemes": [
+          "http",
+          "https"
+        ]
+      }
+    ],
     "asarUnpack": [
       "**/*.node"
     ],

@@ -66,6 +66,10 @@ jobs:
         if: runner.os == 'Windows'
         run: npm run test:runtime:electron
 
+      - name: Verify website sign-in popups on Windows
+        if: runner.os == 'Windows'
+        run: npm run test:auth:electron
+
       - name: Verify browser migration and Arc workflows on Windows
         if: runner.os == 'Windows'
         run: npm run test:orbe:electron

@@ -11,8 +11,20 @@ function playable(overrides = {}) {
     streaming_data: { adaptive_formats: [format(true), format(false)] },
     toDash: async () => `<MPD><BaseURL>${URL.replaceAll('&', '&amp;')}</BaseURL></MPD>`, ...overrides };
 }
+const HLS = 'https://manifest.googlevideo.com/api/manifest/hls_variant/expire/9999999999/index.m3u8';
+// The same answer with the HLS manifest the Apple clients play from.
+function playableHls(overrides = {}) {
+  const info = playable(overrides);
+  return { ...info, streaming_data: { hls_manifest_url: HLS, ...info.streaming_data } };
+}
 function service(options = {}) {
   return new YouTubeService({ createClient: async () => ({ userAgent: 'fixture-client', getInfo: async () => playable() }), ...options });
+}
+// DASH comes from the web/TV routes: VISIONOS and IOS only ever offer HLS.
+function dashService(options = {}) {
+  const api = service(options);
+  api.order = [...CLIENTS.filter(client => !['VISIONOS', 'IOS'].includes(client)), 'VISIONOS', 'IOS'];
+  return api;
 }
 
 test('local media analytics retains exact range, HTTP status, elapsed time and final method without transport URLs', async () => {
@@ -75,14 +87,16 @@ test('Shorts defaults to native playback while ordinary video URLs remain eligib
   }
 });
 
-test('starts with Litube VisionOS route, shares in-flight work and uses a bounded stream cache', async () => {
+test('starts with the VisionOS HLS route, shares in-flight work and uses a bounded stream cache', async () => {
   const calls = [];
   let now = 0;
   const api = service({ now: () => now, createClient: async ({ client }) => ({ getInfo: async () => {
-    calls.push(client); await new Promise(resolve => setTimeout(resolve, 5)); return playable();
+    calls.push(client); await new Promise(resolve => setTimeout(resolve, 5)); return playableHls();
   } }) });
   const [a, b] = await Promise.all([api.resolve(ID), api.resolve(ID)]);
   assert.equal(a, b);
+  assert.equal(a.kind, 'hls', 'VisionOS adaptive URLs need a PO token, so its HLS manifest is used');
+  assert.equal(a.url, HLS);
   assert.deepEqual(calls, ['VISIONOS']);
   await api.resolve(ID);
   assert.equal(calls.length, 1);
@@ -101,7 +115,7 @@ test('fallback rejects SABR-only and unplayable clients, promotes a client only 
   } }) });
   const source = await api.resolve(ID);
   assert.equal(source.client, 'WEB_EMBEDDED');
-  assert.deepEqual(calls, ['VISIONOS', 'WEB', 'WEB_EMBEDDED']);
+  assert.deepEqual(calls, ['VISIONOS', 'IOS', 'WEB', 'WEB_EMBEDDED'], 'IOS without an HLS manifest does not fall back to its DASH formats');
   assert.equal(api.order[0], 'VISIONOS');
   api.notePlaying(source);
   assert.equal(api.order[0], 'WEB_EMBEDDED');
@@ -116,7 +130,7 @@ test('a stale shared resolution cannot overwrite a fresh recovery or another acc
   const api = service({ getCookie: async () => cookie, createClient: async () => ({ getInfo: async () => {
     const call = ++calls;
     if (call === 1) await new Promise(resolve => { release = resolve; });
-    return playable({ basic_info: { title: String(call) } });
+    return playableHls({ basic_info: { title: String(call) } });
   } }) });
   const stale = api.resolve(ID);
   while (!release) await new Promise(resolve => setImmediate(resolve));
@@ -136,14 +150,14 @@ test('media refusal defers the exact client for thirty seconds without excluding
   const api = service({ now: () => now, createClient: async ({ client }) => ({ getInfo: async () => {
     calls.push(client);
     if (onlyVisionWorks && client !== 'VISIONOS') throw new Error('No source');
-    return playable();
+    return playableHls();
   } }), fetchImpl: async () => new Response('', { status }) });
   const source = await api.resolve(ID);
   const uri = api.registerUrl(URL, source);
   await assert.rejects(api.media({ uri, requestId: 'refused' }), /HTTP 403/);
   calls.length = 0;
-  assert.equal((await api.resolve(ID, { fresh: true })).client, 'WEB');
-  assert.equal(calls[0], 'WEB');
+  assert.equal((await api.resolve(ID, { fresh: true })).client, 'IOS');
+  assert.equal(calls[0], 'IOS');
   onlyVisionWorks = true;
   calls.length = 0;
   assert.equal((await api.resolve(ID, { fresh: true })).client, 'VISIONOS');
@@ -175,13 +189,13 @@ test('resolution diagnostics identify the failed phase without leaking URLs, coo
 
 test('consent cookie churn cannot erase current media-refusal feedback, while account changes remain isolated', async () => {
   let cookie = 'SID=account-a; CONSENT=before';
-  const api = service({ getCookie: async () => cookie,
+  const api = service({ getCookie: async () => cookie, createClient: async () => ({ getInfo: async () => playableHls() }),
     fetchImpl: async () => new Response('', { status: 403 }) });
   const source = await api.resolve(ID);
   const uri = api.registerUrl(URL, source);
   await assert.rejects(api.media({ uri, requestId: 'first-account' }), /HTTP 403/);
   cookie = 'YSC=rotated; CONSENT=after; SID=account-a';
-  assert.equal((await api.resolve(ID, { fresh: true })).client, 'WEB');
+  assert.equal((await api.resolve(ID, { fresh: true })).client, 'IOS');
   cookie = 'SID=account-b; CONSENT=after';
   assert.equal((await api.resolve(ID, { fresh: true })).client, 'VISIONOS');
 });
@@ -189,7 +203,7 @@ test('consent cookie churn cannot erase current media-refusal feedback, while ac
 test('a hanging client has a deadline and failures do not poison the cache', async () => {
   let works = false;
   const api = service({ attemptMs: 10, totalMs: 500, createClient: async ({ client }) => ({ getInfo: async () => {
-    if (works) return playable();
+    if (works) return playableHls();
     if (client === 'VISIONOS') return new Promise(() => {});
     throw new Error('sensitive response data');
   } }) });
@@ -252,7 +266,7 @@ test('signed media expiry shortens the stream cache lifetime', async () => {
   let calls = 0;
   const api = service({ now: () => now, createClient: async () => ({ getInfo: async () => {
     calls++;
-    const info = playable();
+    const info = playableHls();
     info.streaming_data.expires = new Date(now + 40000);
     return info;
   } }) });
@@ -266,7 +280,7 @@ test('signed DASH and HLS URL expiry bounds caching even when expiresInSeconds i
   for (const kind of ['dash', 'hls']) {
     let now = 100000;
     let calls = 0;
-    const api = service({ now: () => now, createClient: async () => ({ getInfo: async () => {
+    const api = dashService({ now: () => now, createClient: async () => ({ getInfo: async () => {
       calls++;
       const expiry = (now + 40000) / 1000;
       const signed = `https://rr1.googlevideo.com/videoplayback?expire=${expiry}&id=secret`;
@@ -288,13 +302,13 @@ test('malformed formats are filtered before manifest generation and all valid AB
     { ...format(false), index_range: { start: NaN, end: 10 } },
     { ...format(false), drm_families: ['WIDEVINE'] }, { ...format(false), is_type_otf: true }
   ];
-  const api = service({ createClient: async () => ({ getInfo: async () => playable({
+  const api = dashService({ createClient: async () => ({ getInfo: async () => playable({
     streaming_data: { adaptive_formats: [...good, ...bad] }, toDash: async ({ format_filter }) => {
       assert.deepEqual([...good, ...bad].filter(value => !format_filter(value)), good);
       return `<MPD><BaseURL>${URL.replaceAll('&', '&amp;')}</BaseURL></MPD>`;
     }
   }) }) });
-  assert.equal((await api.resolve(ID)).client, 'VISIONOS');
+  assert.equal((await api.resolve(ID)).client, 'WEB');
 });
 
 test('unsupported DASH and HLS transports fail at the manifest phase before they are cached', async () => {
@@ -403,7 +417,7 @@ test('HLS variants, relative segments and keys stay inside the isolated media tr
 test('a refused adaptive GET uses the same source and range for POST and remembers successful transport', async () => {
   const calls = [];
   let extractions = 0;
-  const api = service({ createClient: async () => ({ userAgent: 'same-client', getInfo: async () => {
+  const api = dashService({ createClient: async () => ({ userAgent: 'same-client', getInfo: async () => {
     extractions++;
     return playable();
   } }), fetchImpl: async (url, options) => {
@@ -619,7 +633,7 @@ test('a temporary pre-roll refusal retries the same media handle and client thro
   context.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
   const calls = [];
   let extractions = 0;
-  const api = service({ createClient: async () => ({ userAgent: 'same-client', getInfo: async () => {
+  const api = dashService({ createClient: async () => ({ userAgent: 'same-client', getInfo: async () => {
     extractions++;
     return playable({ mediaAvailableAt: 16000 });
   } }), fetchImpl: async (url, options) => {
@@ -735,4 +749,117 @@ test('a held media request retains its normal transport timeout after readiness'
   await advanceTimers(context, 1);
   await rejected;
   assert.equal(api.requests.size, 0);
+});
+
+// Stream Tube's streams.rs: real visitor IDs, iOS visitor rotation, HLS-only Apple clients.
+function innertubeFetch(handler) {
+  return async (input, init = {}) => {
+    const url = typeof input === 'string' ? input : input.url;
+    const body = JSON.parse(init.body || (typeof input === 'string' ? '{}' : await input.clone().text()));
+    const headers = new Headers(typeof input === 'string' ? init.headers : input.headers);
+    if (init.headers) new Headers(init.headers).forEach((value, key) => headers.set(key, value));
+    const answer = await handler({ url, body, headers });
+    return new Response(JSON.stringify(answer), { headers: { 'content-type': 'application/json' } });
+  };
+}
+const SERVER_VISITOR = 'CgtTZXJ2ZXJWaXNpdG9yKO2X2rsG';
+
+test('VisionOS sends a server-issued visitor ID, fetched once per tab and replaced by a local one on failure', async () => {
+  const requests = [];
+  let visitorWorks = true;
+  const api = new YouTubeService({ fetchImpl: innertubeFetch(({ url, body, headers }) => {
+    requests.push({ url, body, headers });
+    if (/\/visitor_id/.test(url)) {
+      if (!visitorWorks) throw new Error('offline');
+      assert.equal(body.context.client.clientName, 'WEB');
+      return { responseContext: { visitorData: SERVER_VISITOR } };
+    }
+    return { playabilityStatus: { status: 'OK' }, videoDetails: { videoId: ID, title: 'Visitor', lengthSeconds: '10' } };
+  }) });
+  for (let i = 0; i < 2; i++) await (await api.createInnertube({ client: 'VISIONOS' })).getInfo(ID);
+  const players = requests.filter(request => /\/player/.test(request.url));
+  assert.equal(requests.filter(request => /\/visitor_id/.test(request.url)).length, 1, 'the visitor ID is cached');
+  assert.ok(players.every(request => request.body.context.client.visitorData === SERVER_VISITOR &&
+    request.headers.get('x-goog-visitor-id') === SERVER_VISITOR));
+  const offline = new YouTubeService({ fetchImpl: api.fetchImpl });
+  visitorWorks = false;
+  requests.length = 0;
+  await (await offline.createInnertube({ client: 'VISIONOS' })).getInfo(ID);
+  const fallback = requests.find(request => /\/player/.test(request.url));
+  assert.ok(fallback.body.context.client.visitorData && fallback.body.context.client.visitorData !== SERVER_VISITOR);
+});
+
+test('iOS retries without a visitor until YouTube offers HLS, then keeps the visitor that worked', async () => {
+  const visitors = [];
+  let hlsFor = 'assigned-2';
+  let fresh = 0;
+  const api = new YouTubeService({ fetchImpl: innertubeFetch(({ url, body, headers }) => {
+    assert.doesNotMatch(url, /\/visitor_id/, 'iOS does not use the shared WEB visitor');
+    const visitor = body.context.client.visitorData;
+    visitors.push(visitor ?? null);
+    assert.equal(headers.has('x-goog-visitor-id'), !!visitor, 'no empty visitor header');
+    const assigned = visitor || `assigned-${++fresh}`;
+    return { responseContext: { visitorData: assigned }, playabilityStatus: { status: 'OK' },
+      videoDetails: { videoId: ID, title: 'iOS', lengthSeconds: '10' },
+      streamingData: assigned === hlsFor ? { hlsManifestUrl: HLS } : { adaptiveFormats: [] } };
+  }) });
+  const client = await api.createInnertube({ client: 'IOS' });
+  assert.equal((await client.getInfo(ID)).streaming_data.hls_manifest_url, HLS);
+  assert.deepEqual(visitors, [null, null], 'a SABR-only visitor is not reused');
+  assert.equal(api.iosVisitor, 'assigned-2');
+  visitors.length = 0;
+  await client.getInfo(ID);
+  assert.deepEqual(visitors, ['assigned-2'], 'the working visitor goes first next time');
+  hlsFor = 'never';
+  visitors.length = 0;
+  await client.getInfo(ID);
+  assert.equal(visitors.length, 5, 'attempts are bounded');
+  assert.equal(api.iosVisitor, '', 'a visitor that stopped working is dropped');
+});
+
+test('an iOS playability refusal ends visitor rotation immediately', async () => {
+  let calls = 0;
+  const api = new YouTubeService({ fetchImpl: innertubeFetch(() => {
+    calls++;
+    return { playabilityStatus: { status: 'LOGIN_REQUIRED', reason: 'Sign in' } };
+  }) });
+  const info = await (await api.createInnertube({ client: 'IOS' })).getInfo(ID);
+  assert.equal(info.playability_status.status, 'LOGIN_REQUIRED');
+  assert.equal(calls, 1);
+});
+
+test('HLS-only clients never prepare the player solver for adaptive URLs they do not expose', async context => {
+  const { Player } = await import('youtubei.js');
+  const create = context.mock.method(Player, 'create', async () => ({ signature_timestamp: 1 }));
+  const challenged = 'https://rr1.googlevideo.com/videoplayback?expire=9999999999&n=challenge&itag=137';
+  const api = new YouTubeService({ fetchImpl: innertubeFetch(({ url }) => /\/visitor_id/.test(url)
+    ? { responseContext: { visitorData: SERVER_VISITOR } }
+    : { playabilityStatus: { status: 'OK' }, videoDetails: { videoId: ID, title: 'HLS', lengthSeconds: '10' },
+      streamingData: { hlsManifestUrl: HLS, adaptiveFormats: [{ itag: 137, url: challenged, mimeType: 'video/mp4; codecs="avc1"', bitrate: 1 }] } }) });
+  for (const client of ['VISIONOS', 'IOS']) await (await api.createInnertube({ client })).getInfo(ID);
+  assert.equal(create.mock.callCount(), 0);
+  await (await api.createInnertube({ client: 'ANDROID_VR' })).getInfo(ID);
+  assert.equal(create.mock.callCount(), 1, 'other direct clients still solve challenged adaptive URLs');
+});
+
+test('HLS segments report their real container, since YouTube labels them all seg.ts and octet-stream', async () => {
+  const ts = new Uint8Array(376); ts[0] = 0x47; ts[188] = 0x47;
+  const bodies = {
+    id3: new Uint8Array([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 0]),
+    adts: new Uint8Array([0xff, 0xf1, 0x50, 0x80]),
+    ts,
+    fmp4: new Uint8Array([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0, 0])
+  };
+  const api = service({ createClient: async () => ({ getInfo: async () => playableHls() }),
+    fetchImpl: async url => new Response(bodies[/[?&]body=(\w+)/.exec(url)[1]], { status: 200, headers: { 'content-type': 'application/octet-stream' } }) });
+  const source = await api.resolve(ID);
+  assert.equal(source.kind, 'hls');
+  const expected = { id3: 'audio/aac', adts: 'audio/aac', ts: 'video/mp2t', fmp4: 'application/octet-stream' };
+  for (const [body, type] of Object.entries(expected)) {
+    const uri = api.registerUrl(`https://rr1.googlevideo.com/videoplayback/file/seg.ts?body=${body}`, source);
+    assert.equal((await api.media({ uri, requestId: body })).headers['content-type'], type, body);
+  }
+  const dash = dashService({ fetchImpl: async () => new Response(bodies.id3, { status: 206, headers: { 'content-type': 'audio/mp4' } }) });
+  const dashUri = dash.registerUrl(URL, await dash.resolve(ID));
+  assert.equal((await dash.media({ uri: dashUri, requestId: 'dash', range: 'bytes=0-9' })).headers['content-type'], 'audio/mp4', 'DASH types are untouched');
 });

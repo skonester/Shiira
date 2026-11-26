@@ -68,11 +68,6 @@ contextBridge.exposeInMainWorld('shiiraAPI', {
     ipcRenderer.on('open-url-in-new-tab', (event, url) => callback(url));
   },
   
-  // OAuth modal
-  onShowOAuthModal: (callback) => {
-    ipcRenderer.on('show-oauth-modal', (event, url) => callback(url));
-  },
-  
   // Permission requests
   onPermissionRequest: (callback) => {
     ipcRenderer.on('permission-request', (event, data) => callback(data));
