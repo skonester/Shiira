@@ -38,7 +38,7 @@
 | | |
 | --- | --- |
 | **Engine** | Chromium 156 via Castlabs Electron 45 ([runtime maintenance](docs/runtime.md)) |
-| **Release** | `0.4.0` |
+| **Release** | `0.5.0` |
 | **Platforms** | Windows · macOS · Linux |
 | **License** | GPL-3.0-only |
 | **Best for** | Tab-heavy workflows, customization, and focused browsing |
@@ -70,7 +70,7 @@ Shiira is built for people who want a browser that feels like *their* workspace.
 ### Practical browser tools
 
 - **Browser bookmark import** from Chrome, Edge, Brave, Vivaldi, Opera, Chromium, Firefox, Safari or an HTML export. Preview a source/profile, then choose a new Space, current Space or the bookmarks bar. Pinned bookmarks start asleep. **Arc migration** also brings spaces, nested pinned tabs, all profiles' favorites, optional Today tabs and history, archived tabs, and cached icons into Shiira's Default profile; assign different profiles to imported Spaces afterwards.
-- **Recent-tab switcher** with Ctrl+Tab, clean link and Markdown copying, Space export, area/full-page capture, per-site CSS **Boosts and Zap**, localhost developer mode, automatic picture-in-picture and sidebar media controls. See the [Orbe port comparison and remaining gaps](docs/orbe-feature-port.md).
+- **Recent-tab switcher** with Ctrl+Tab, clean link and Markdown copying, Space export, area/full-page capture, per-site CSS **Boosts and Zap**, localhost developer mode, automatic picture-in-picture and sidebar media controls.
 - **Little Shiira** opens quick pages with Ctrl/Cmd+Alt+N and promotes them into a chosen Space. **Link Routing** sends links from other apps to a Space or Little window. **Settings → Keyboard Shortcuts** records custom bindings, resolves browser-command conflicts and resets defaults.
 - **Notes and Easels** open from the pen button or command bar. Write formatted notes and checklists, or arrange text, drawings, shapes, images and page captures on a canvas. Documents autosave locally by profile, preserve concurrent edits through Save as copy, and export to text or PNG.
 - **Tab to Search** in the command bar: type a site such as `youtube` or `github`, press `Tab`, then enter your query. Search archived tabs too, or use `Shift+Enter` to open a webpage result in split view. Brave, Scira and DuckDuckGo shortcuts use Shiira's internal search tab.
@@ -82,14 +82,44 @@ Shiira is built for people who want a browser that feels like *their* workspace.
 ### Privacy without ceremony
 
 - Network and cosmetic ad blocking powered by a bundled filtering engine.
-- Litube-style direct YouTube playback with adaptive buffering, source recovery, and a built-in YouTube-player fallback. See [YouTube playback](docs/youtube-playback.md).
+- Direct YouTube playback without YouTube's ads, using the HLS streams YouTube serves to its Apple apps, with adaptive buffering, source recovery and a built-in YouTube-player fallback. See the [playback audit](docs/litube-playback-audit.md) and [live test notes](docs/youtube-live-test-2026-11-14.md).
 - Private tabs that keep extensions disabled.
 - Optional clear-on-exit cache behavior and straightforward browsing-data controls.
 - Password storage backed by the operating system keychain.
 
 Password Anvil and the bookmarks bar are app-wide tools. Vault autofill is enabled only in Default; other profiles do not receive its credentials automatically. Notes, Easels and shared sidebars are local to this installation, with no cloud account or cross-device sync.
 
-## Latest release — `0.4.0`
+## Latest release — `0.5.0`
+
+Version 0.5.0 makes YouTube playback reliable when signed out and replaces the old sign-in modal with real website popups.
+
+### YouTube playback
+
+- **Seeking works.** Earlier releases built DASH streams from the iOS and visionOS clients. YouTube cuts those URLs off after about 1 MB unless the request carries a proof-of-origin token, so playback stopped and every seek outside the buffer failed with HTTP 403. Shiira now plays these clients' HLS manifests, which need neither a token nor the player-script solver.
+- **Fewer bot checks.** visionOS requests carry a visitor ID issued by YouTube instead of a locally generated one. The iOS client rotates to a fresh visitor when YouTube leaves out the HLS manifest, and keeps the first one that works.
+- **Audio starts.** YouTube labels every HLS segment `seg.ts`, whatever its real format. Shiira now reports each segment's container (MPEG-TS, fMP4 or packed AAC) so the player buffers audio correctly.
+- visionOS and iOS now come first in the client order, ahead of the web clients.
+
+In a signed-out live test of the same 16-minute video that failed in 0.4.0, Shiira played 1080p60 in about one second, completed all four seek scenarios, and made 92 media requests without one failure. 0.4.0 lost 90 of 295 requests to HTTP 403. Only that one video was tested. This approach follows [Stream Tube](https://github.com/Avaneesh-Inamdar/Stream-Tube-Desktop) (MIT).
+
+### Website sign-in
+
+- **Native site popups.** Login and other popups that a page requests open as real windows in the originating page's profile, including private tabs. They keep `window.opener`, cross-origin messaging, referrers, form submissions and named windows. The old sign-in modal, which loaded popup URLs in an unrelated view, has been removed.
+- **Browser identity.** Shiira reports the installed Chromium version and the real operating system, without Electron or Shiira product tokens, and disables Blink's automation indicator.
+- Regular new-tab links still open in Shiira's tab strip.
+
+> [!IMPORTANT]
+> **Google sign-in can still be rejected.** Google may still answer "This browser or app may not be secure", for example on Scira's **Continue with Google**. The cause has not been found. See [website sign-in compatibility](docs/site-sign-in.md).
+
+### Release checks
+
+- The Windows release workflow runs a new sign-in smoke test against two local origins, covering popups, cross-origin messages, form POSTs and profile isolation.
+- Local verification passed **240 unit tests** and the YouTube Electron smoke test.
+
+## Previous releases
+
+<details>
+<summary><strong><code>0.4.0</code> — Litube-based playback recovery and faster startup</strong></summary>
 
 - YouTube media requests retain Litube-style pre-roll availability deadlines, adaptive query ranges, and same-source POST compatibility after a refused GET. Shaka retries temporary failures before source recovery.
 - Pre-roll handling includes modern ad slots and forecasting ads with unknown duration. Buffering alone no longer unloads the player. Equal challenges share evaluation, and VOD HLS path challenges are resolved.
@@ -100,22 +130,21 @@ Password Anvil and the bookmarks bar are app-wide tools. Vault autofill is enabl
 - The UI preload sets the home screen's dark canvas before renderer initialization. Remote fonts wait until initial readiness, and the splash timeout waits for first paint.
 - Graphics selection uses Chromium's platform defaults and driver restrictions instead of forcing Vulkan on every operating system.
 
-Live playback, splash appearance and startup timing still need verification in the packaged application.
 The [Litube playback audit](docs/litube-playback-audit.md) records the remaining gaps in the adaptation.
 
-## Previous release — `0.3.9`
+</details>
+
+<details>
+<summary><strong><code>0.3.9</code> — Chromium 156 engine upgrade and native Shorts playback</strong></summary>
 
 Version 0.3.9 brings a major browser-engine upgrade, fixes YouTube Shorts compatibility, and updates clipboard handling, password-storage dependencies, packaging, and release checks.
 
 > [!IMPORTANT]
 > **Scira API key support is still under investigation.** This release does not resolve the Scira API integration issue. Scira website searches remain available, with Web, Reddit and X source selection preserved. When an API request fails or no key is configured, Shiira opens Scira's website in the same tab.
 
-<details>
-<summary><strong>See what changed</strong></summary>
-
 - **Browser-engine upgrade:** moved from Castlabs Electron `39.0.0+wvcus` / Chromium `142.0.7444.52` to Castlabs Electron `45.2.1+wvcus` / Chromium `156.0.8078.75`, with embedded Node.js `24.22.1`. The application and packaged builds use the same pinned Castlabs runtime. See [runtime maintenance](docs/runtime.md) for the update policy and Castlabs' release cadence.
 - **Native YouTube Shorts playback:** disabled Shiira's built-in ad blocking and Litube stream replacement on `/shorts` pages by default, so Shorts uses YouTube's own player and scrolling feed.
-- **Navigation between Shorts and watch videos:** entering Shorts releases the replacement player and its pending media work, including when switching to the same video without a page reload. Returning to a regular watch page restores filtering and Litube playback. Direct Shorts loads receive the same exception. See [YouTube playback](docs/youtube-playback.md).
+- **Navigation between Shorts and watch videos:** entering Shorts releases the replacement player and its pending media work, including when switching to the same video without a page reload. Returning to a regular watch page restores filtering and Litube playback. Direct Shorts loads receive the same exception.
 - **Clipboard compatibility:** updated Copy image for Electron's asynchronous clipboard API, covering both image URLs and image data. Failed clipboard writes report an error instead of being treated as successful copies.
 - **Password-storage compatibility:** upgraded `better-sqlite3` to `13.1.1` and verified encrypted password creation, updates and deletion with the new runtime. SQLite and keytar use Node-API binaries, avoiding a rebuild for each Electron ABI.
 - **Widevine initialization:** restored explicit component initialization in the background, allowing the browser to open while Widevine installs or updates. Production streaming-service compatibility still depends on signing and provider requirements.
@@ -233,8 +262,6 @@ installer/                Installer UI
 ```
 
 ## Status and roadmap
-
-See the [Arc/YARC feature comparison](docs/arc-feature-comparison.md) for migration details and remaining gaps, including isolated profiles, Little Arc, multiwindow workspace sharing, and advanced split layouts.
 
 Shiira is usable today as a secondary desktop browser and is still evolving. The classic Shiira-inspired feature set is being rebuilt incrementally around the modern sidebar workflow.
 

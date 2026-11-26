@@ -1,6 +1,6 @@
 // Shiira Browser - Vault Manager Module (Safe Folder)
 // Adapted from Silver Browser (github.com/nichin-labs/silver) by Hitroo Labs — Apache License 2.0.
-// See THIRD_PARTY_NOTICES/silver-browser-APACHE-2.0.txt. Ghost AI agent not included.
+// See THIRD_PARTY_NOTICES/APACHE-2.0.txt. Ghost AI agent not included.
 
 import { escapeHtml } from './utils.js';
 

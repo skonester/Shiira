@@ -47,7 +47,7 @@ SOFTWARE.
 
 Shiira's **Shield** (encrypted DNS / DNS-over-HTTPS) feature and the **Safe Folder** and PIN/Touch ID unlock gate of the **Vault** are adapted from [Silver Browser](https://github.com/nichin-labs/silver) by **Hitroo Labs**, released under the Apache License 2.0. The adapted code was reworked to fit Shiira's existing architecture (plain JS/CommonJS instead of TypeScript, Shiira's own OS-keychain-backed encryption key instead of Silver's machine-fingerprint key, Shiira's own UI panel/menu conventions). Silver Browser's "Ghost" AI agent and everything that supports it were **not** used anywhere in Shiira.
 
-A verbatim copy of the Apache License 2.0 is included at [`THIRD_PARTY_NOTICES/silver-browser-APACHE-2.0.txt`](THIRD_PARTY_NOTICES/silver-browser-APACHE-2.0.txt), as required by the license.
+A verbatim copy of the Apache License 2.0 is included at [`THIRD_PARTY_NOTICES/APACHE-2.0.txt`](THIRD_PARTY_NOTICES/APACHE-2.0.txt), as required by the license.
 
 ---
 
@@ -57,7 +57,7 @@ Shiira's first-run setup, settings layout, and custom color wheel were adapted f
 
 ## Orbe Attribution (MIT License)
 
-Browser bookmark readers, the Netscape HTML parser, clean-link copying, Zap selector validation, keep-alive site rules, and synthetic bookmark fixtures are adapted from [Orbe](https://github.com/amadoubaui/orbe), copyright (c) 2026 **Amadou Ba (PIXEWORK)**, under the MIT License. The MRU switcher, Boosts editor, split layouts, capture tools and background media workflows were adapted to Shiira's existing renderer and session architecture. The complete license is included in [`THIRD_PARTY_NOTICES/orbe-MIT.txt`](THIRD_PARTY_NOTICES/orbe-MIT.txt). See [the implementation comparison](docs/orbe-feature-port.md) for scope and remaining differences.
+Browser bookmark readers, the Netscape HTML parser, clean-link copying, Zap selector validation, keep-alive site rules, and synthetic bookmark fixtures are adapted from [Orbe](https://github.com/amadoubaui/orbe), copyright (c) 2026 **Amadou Ba (PIXEWORK)**, under the MIT License. The MRU switcher, Boosts editor, split layouts, capture tools and background media workflows were adapted to Shiira's existing renderer and session architecture. The complete license is included in [`THIRD_PARTY_NOTICES/orbe-MIT.txt`](THIRD_PARTY_NOTICES/orbe-MIT.txt).
 
 The shortcut canonicalizer and defaults/override/conflict workflow, host/path routing rules, and Little-window promotion workflow also follow Orbe's `shortcuts.js`, `prefs.js` and `little.js`. Little Shiira reuses Shiira's existing sandboxed webviews and player, with its own English UI and main-process delivery acknowledgements.
 
@@ -121,6 +121,11 @@ JavaScript stream resolver uses [YouTube.js](https://github.com/LuanRT/YouTube.j
 (MIT), and the adaptive player uses [Shaka Player](https://github.com/shaka-project/shaka-player)
 (Apache 2.0 and included component licenses). See
 [`THIRD_PARTY_NOTICES/litube-GPL-3.0-NOTICE.txt`](THIRD_PARTY_NOTICES/litube-GPL-3.0-NOTICE.txt).
+
+HLS-only playback for the visionOS and iOS clients, server-issued visitor IDs
+and iOS visitor rotation follow [Stream Tube](https://github.com/Avaneesh-Inamdar/Stream-Tube-Desktop)'s
+`src/api/streams.rs` (MIT, Copyright (c) 2026 Avaneesh Inamdar). See
+[`THIRD_PARTY_NOTICES/stream-tube-MIT.txt`](THIRD_PARTY_NOTICES/stream-tube-MIT.txt).
 
 Playback diagnostics use FastPix, Inc's MIT-licensed Shaka analytics adapter
 1.0.7 from the supplied `shaka-player-analytics-main` project, adapted to use
